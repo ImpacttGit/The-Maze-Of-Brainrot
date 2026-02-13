@@ -34,4 +34,8 @@ print("[Boot_Core] GamePassService loaded ✓")
 local FollowerService = require(ServerScriptService:WaitForChild("FollowerService"))
 print("[Boot_Core] FollowerService loaded ✓")
 
+local PowerUpService = require(ServerScriptService:WaitForChild("PowerUpService"))
+PowerUpService.init()
+print("[Boot_Core] PowerUpService loaded ✓")
+
 print("[Boot_Core] All core systems ready ✓")

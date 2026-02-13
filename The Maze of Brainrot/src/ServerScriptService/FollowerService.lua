@@ -168,25 +168,9 @@ local function createFollowerModel(itemId: string, player: Player): Model?
 end
 
 --------------------------------------------------------------------------------
--- Follow logic: make follower walk beside player
+-- Follow logic: Client handles movement (Network Ownership)
 --------------------------------------------------------------------------------
-
-local function startFollowing(followerModel: Model, player: Player, offset: number)
-    task.spawn(function()
-        while followerModel and followerModel.Parent do
-            local character = player.Character
-            if character then
-                local hrp = character:FindFirstChild("HumanoidRootPart")
-                local humanoid = followerModel:FindFirstChildWhichIsA("Humanoid")
-                if hrp and humanoid then
-                    local targetPos = hrp.Position + hrp.CFrame.RightVector * offset + hrp.CFrame.LookVector * -2
-                    humanoid:MoveTo(targetPos)
-                end
-            end
-            task.wait(0.3)
-        end
-    end)
-end
+-- startFollowing removed. Client uses RenderStepped.
 
 --------------------------------------------------------------------------------
 -- Update followers for a player
@@ -231,10 +215,16 @@ function FollowerService.updateFollowers(player: Player)
                 if hrp then
                     model:SetPrimaryPartCFrame(hrp.CFrame * CFrame.new(3 + offsetIndex * 2, 0, -2))
                 end
+                
+                -- NETWORK OWNERSHIP for smooth client physics
+                if model.PrimaryPart then
+                    model.PrimaryPart:SetNetworkOwner(player)
+                end
+                
                 model.Parent = Workspace
 
-                local offset = 3 + offsetIndex * 2
-                startFollowing(model, player, offset)
+                -- Tell client to animate/smooth this
+                Remotes.SpawnFollower:FireClient(player, model, itemId, offsetIndex)
 
                 activeFollowers[userId][itemId] = model
                 offsetIndex += 1

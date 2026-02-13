@@ -55,6 +55,9 @@ EntityConfig.Entities = {
         PursuitDuration = 8,
         PlayerSeekChance = 0.5,
         LoseInterestRange = 90,
+        -- New Params
+        StalkGap = 25,             -- Studs to maintain distance
+        RushSpeedMultiplier = 1.5, -- Speed multiplier when back is turned
     },
 
     ScurryingShadow = {
@@ -91,6 +94,8 @@ EntityConfig.Entities = {
         PursuitDuration = 999,
         PlayerSeekChance = 1.0,
         LoseInterestRange = 999,
+        -- New Params
+        FreezeOnSight = true,
     },
 
     RustedJanitor = {
@@ -109,6 +114,9 @@ EntityConfig.Entities = {
         PursuitDuration = 5,
         PlayerSeekChance = 0.4,
         LoseInterestRange = 75,
+        -- New Params
+        SwitchIntervalMin = 5,
+        SwitchIntervalMax = 10,
     },
 }
 

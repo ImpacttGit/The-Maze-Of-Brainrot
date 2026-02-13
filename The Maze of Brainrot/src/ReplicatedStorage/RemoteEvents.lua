@@ -93,7 +93,8 @@ local REMOTE_NAMES = {
     "KickPlayer",
     "PartyUpdate",       -- Sent to clients to update UI
     "PartyInviteReceived", -- Sent to invited player
-    "DownedState"        -- Sent when DBNO
+    "DownedState",       -- Sent when DBNO
+    "SpawnFollower"      -- Sent to client to take control of follower
 }
 
 --------------------------------------------------------------------------------
