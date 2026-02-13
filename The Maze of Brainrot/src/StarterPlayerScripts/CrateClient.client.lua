@@ -494,6 +494,11 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
+-- Listen for OpenCrateShop (from ProximityPrompt)
+Remotes.OpenCrateShop.OnClientEvent:Connect(function()
+    toggleShop() -- Opens if closed
+end)
+
 -- Listen for shared toggle event (from HUD)
 local toggleEvent = ReplicatedStorage:WaitForChild("ToggleCrateShop", 5)
 if toggleEvent then

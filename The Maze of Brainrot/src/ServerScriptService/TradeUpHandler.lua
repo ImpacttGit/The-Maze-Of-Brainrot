@@ -38,12 +38,10 @@ local function createTradeUpMachine()
     local machine = Instance.new("Part")
     machine.Name = MACHINE_NAME
     machine.Size = Vector3.new(6, 6, 6)
-    machine.Position = Vector3.new(-15, 3, -10)
+    machine.Position = Vector3.new(-25, 3, -20) -- Matches LobbyBuilder visual
     machine.Anchored = true
     machine.CanCollide = true
-    machine.Color = Color3.fromRGB(163, 53, 238) -- Purple / Epic color
-    machine.Material = Enum.Material.DiamondPlate
-    machine.Shape = Enum.PartType.Block
+    machine.Transparency = 1 -- Invisible hitbox
     machine.Parent = Workspace
 
     -- Prompt
@@ -52,32 +50,11 @@ local function createTradeUpMachine()
     prompt.ActionText = "Open Trade-Up"
     prompt.HoldDuration = 0
     prompt.MaxActivationDistance = 10
+    prompt.RequiresLineOfSight = false
     prompt.Parent = machine
 
-    -- Billboard
-    local billboard = Instance.new("BillboardGui")
-    billboard.Size = UDim2.new(0, 220, 0, 50)
-    billboard.StudsOffset = Vector3.new(0, 5, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = machine
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = "⚗️ TRADE-UP MACHINE"
-    label.TextColor3 = Color3.fromRGB(163, 53, 238)
-    label.TextSize = 20
-    label.Font = Enum.Font.GothamBold
-    label.TextStrokeTransparency = 0.5
-    label.Parent = billboard
-
-    -- Purple glow
-    local glow = Instance.new("PointLight")
-    glow.Brightness = 2
-    glow.Range = 15
-    glow.Color = Color3.fromRGB(163, 53, 238)
-    glow.Parent = machine
-
+    -- Note: LobbyBuilder creates the visual machine, billboard, and lights
+    
     -- Connect prompt
     prompt.Triggered:Connect(function(player)
         -- Send inventory data then open trade-up UI
@@ -85,7 +62,7 @@ local function createTradeUpMachine()
         Remotes.OpenTradeUp:FireClient(player)
     end)
 
-    print("[TradeUpHandler] Created Trade-Up Machine at " .. tostring(machine.Position))
+    print("[TradeUpHandler] Created Trade-Up Interaction Point at " .. tostring(machine.Position))
 end
 
 --------------------------------------------------------------------------------

@@ -707,9 +707,9 @@ local function configureLighting()
     Lighting.FogStart = 100
     Lighting.FogColor = Color3.fromRGB(20, 18, 15)
     Lighting.GlobalShadows = true
-    Lighting.Technology = Enum.Technology.Future
-
-    -- Atmosphere for indoor feel
+    -- Lighting.Technology cannot be set by script at runtime
+    -- Lighting.Technology = Enum.Technology.Future
+    Lighting.ShadowSoftness = 0.2
     local existing = Lighting:FindFirstChildWhichIsA("Atmosphere")
     if not existing then
         local atmo = Instance.new("Atmosphere")

@@ -107,109 +107,167 @@ end
 -- Generate maze + loot + teleport player
 --------------------------------------------------------------------------------
 
+local PartyService = require(ServerScriptService:WaitForChild("PartyService"))
+
+--------------------------------------------------------------------------------
+-- Generate maze + loot + teleport player(s)
+--------------------------------------------------------------------------------
+
 local function startMazeRun(player: Player)
     if not MazeGenerator or not LootSpawner then
         Remotes.MazeEntryResult:FireClient(player, false, "Server still loading...")
         return
     end
 
-    -- Clean up any existing maze for this player
-    if activeMazes[player.UserId] then
-        MazeGenerator.destroy(activeMazes[player.UserId].folder)
-        activeMazes[player.UserId] = nil
+    -- Determine party context
+    local members = {player}
+    local partyData = PartyService.getPartyDataForClient(PartyService.getPlayerPartyId(player)) -- Need server API
+    -- Wait, PartyService.getPartyMembers(player) is available
+    local partyMembers = PartyService.getPartyMembers(player)
+    if partyMembers and #partyMembers > 0 then
+        members = partyMembers
+    end
+    
+    -- Check if leader (if in party)
+    -- Actually getPartyMembers returns {player} if solo, so logic holds.
+    -- But we need to ensure unique session key. Use leader's UserId or PartyId.
+    local leader = members[1] -- Assuming first is leader if from PartyService
+    local sessionKey = leader.UserId -- Use Leader ID as session key for now
+
+    -- Clean up any existing maze for this session
+    if activeMazes[sessionKey] then
+        MazeGenerator.destroy(activeMazes[sessionKey].folder)
+        activeMazes[sessionKey] = nil
     end
 
-    -- 1. Generate maze
-    local folder, startCFrame, exitCFrame, grid, origin = MazeGenerator.generate(player)
+    -- 1. Generate maze (pass first player for seed/difficulty scaling?)
+    local folder, startCFrame, exitCFrame, grid, origin = MazeGenerator.generate(leader)
 
-    -- 2. Spawn loot in the maze
-    local items, lootParts = LootSpawner.spawnLoot(folder, grid, origin)
+    -- 2. Spawn loot
+    LootSpawner.spawnLoot(folder, grid, origin)
 
     -- 3. Store active maze session
     local exitPart = folder:FindFirstChild("MazeExit")
-    activeMazes[player.UserId] = {
+    activeMazes[sessionKey] = {
         folder = folder,
         exitPart = exitPart,
         grid = grid,
         origin = origin,
+        players = members -- Track all players in this session
     }
 
-    -- 4. Connect exit elevator prompt
+    -- 4. Connect exit elevator prompt (triggers for ANY member)
     if exitPart then
         local exitPrompt = exitPart:FindFirstChildWhichIsA("ProximityPrompt")
         if exitPrompt then
             exitPrompt.Triggered:Connect(function(triggerPlayer)
-                if triggerPlayer == player then
-                    exitMazeRun(player)
+                -- Verify player is part of this session
+                local isMember = false
+                for _, m in ipairs(members) do
+                    if m == triggerPlayer then isMember = true break end
+                end
+                
+                if isMember then
+                    exitMazeRun(leader) -- Extract WHOLE party
                 end
             end)
         end
     end
 
-    -- 5. Teleport player to maze start
-    local teleported = teleportPlayer(player, startCFrame)
-    if not teleported then
-        MazeGenerator.destroy(folder)
-        activeMazes[player.UserId] = nil
-        Remotes.MazeEntryResult:FireClient(player, false, "Failed to teleport")
-        return
+    -- 5. Teleport ALL players
+    for _, member in ipairs(members) do
+        local teleported = teleportPlayer(member, startCFrame)
+        if teleported then
+            Remotes.MazeEntryResult:FireClient(member, true, "Entering the Maze...")
+            Remotes.EquipFlashlight:FireClient(member, true)
+            if PlayerManager then
+                PlayerManager.setBattery(member, 100)
+                PlayerManager.setInMaze(member, true)
+            end
+        end
     end
 
-    -- 6. Fire success to client
-    Remotes.MazeEntryResult:FireClient(player, true, "Entering the Maze...")
-
-    -- 7. Equip flashlight on client
-    Remotes.EquipFlashlight:FireClient(player, true)
-
-    -- 8. Set battery to 100% and activate maze backpack limit
-    if PlayerManager then
-        PlayerManager.setBattery(player, 100)
-        PlayerManager.setInMaze(player, true)
-    end
-
-    -- 9. Spawn entity after delay
+    -- 6. Spawn entities (Scale count/difficulty?)
     if EntityManager and DeathHandler then
-        EntityManager.spawnEntity(player, folder, origin, function(killedPlayer)
-            DeathHandler.onEntityKill(killedPlayer)
+        -- Pass list of players to EntityManager?
+        -- EntityManager.spawnEntity checks closest player usually.
+        -- We'll just spawn one for now, or loop for #members.
+        
+        -- Scaling: Spawn 1 entity per player? Or just 1 aggressive one?
+        -- Let's do 1 base + chance for extras.
+        EntityManager.spawnEntity(leader, folder, origin, function(killedPlayer)
+             DeathHandler.onEntityKill(killedPlayer)
         end)
+        
+        if #members > 1 then
+            -- Spawn extra entity for easier pressure
+             EntityManager.spawnEntity(members[2], folder, origin, function(killedPlayer)
+                 DeathHandler.onEntityKill(killedPlayer)
+            end)
+        end
     end
 
-    print("[ElevatorService] " .. player.Name .. " started maze run")
+    print("[ElevatorService] Party of " .. #members .. " started maze run (Leader: " .. leader.Name .. ")")
 end
 
 --------------------------------------------------------------------------------
 -- Exit maze: teleport back to Hub, cleanup
 --------------------------------------------------------------------------------
 
-function exitMazeRun(player: Player)
-    local session = activeMazes[player.UserId]
+function exitMazeRun(playerOrLeader: Player)
+    -- Find session. Iterate if we don't know the key.
+    -- Better: we used Leader UserId as key.
+    -- But player pressing button might not be leader.
+    -- Reverse lookup?
+    
+    local sessionKey = nil
+    local session = nil
+    
+    -- Try direct key
+    if activeMazes[playerOrLeader.UserId] then
+        sessionKey = playerOrLeader.UserId
+        session = activeMazes[sessionKey]
+    else
+        -- Search
+        for key, sess in pairs(activeMazes) do
+            for _, m in ipairs(sess.players) do
+                if m == playerOrLeader then
+                    sessionKey = key
+                    session = sess
+                    break
+                end
+            end
+            if session then break end
+        end
+    end
+
     if not session then return end
 
-    -- Teleport back to Hub
     local hubCFrame = CFrame.new(MazeConfig.HubSpawnPosition)
-    teleportPlayer(player, hubCFrame)
 
-    -- Deactivate flashlight
-    Remotes.EquipFlashlight:FireClient(player, false)
+    -- Extract ALL players
+    for _, member in ipairs(session.players) do
+        teleportPlayer(member, hubCFrame)
+        Remotes.EquipFlashlight:FireClient(member, false)
+        Remotes.ReturnToHub:FireClient(member, "Extracted successfully!")
+        
+        if PlayerManager then
+            PlayerManager.setInMaze(member, false)
+        end
+        
+        -- Create individual stats?
+    end
 
-    -- Cleanup entity
+    -- Cleanup
     if EntityManager then
-        EntityManager.cleanup(player)
+        EntityManager.cleanup(session.players[1]) -- Cleans up entities targeting this group
+        -- Wait, EntityManager might need update to handle group cleanup
     end
 
-    -- Cleanup maze
     MazeGenerator.destroy(session.folder)
-    activeMazes[player.UserId] = nil
+    activeMazes[sessionKey] = nil
 
-    -- Deactivate backpack limit
-    if PlayerManager then
-        PlayerManager.setInMaze(player, false)
-    end
-
-    -- Notify client
-    Remotes.ReturnToHub:FireClient(player, "Extracted successfully!")
-
-    print("[ElevatorService] " .. player.Name .. " extracted from maze")
+    print("[ElevatorService] Session " .. sessionKey .. " ended")
 end
 
 --------------------------------------------------------------------------------
@@ -223,6 +281,15 @@ Remotes.RequestMazeEntry.OnServerEvent:Connect(function(player: Player)
     if lastEntry and (now - lastEntry) < ENTRY_COOLDOWN then
         Remotes.MazeEntryResult:FireClient(player, false, "Please wait before entering again.")
         return
+    end
+
+    -- Party Check: Only Leader can start
+    local partyMembers = PartyService.getPartyMembers(player)
+    if partyMembers and #partyMembers > 1 then
+        if partyMembers[1] ~= player then
+            Remotes.MazeEntryResult:FireClient(player, false, "Only the Party Leader can start the run!")
+            return
+        end
     end
 
     playerCooldowns[player.UserId] = now

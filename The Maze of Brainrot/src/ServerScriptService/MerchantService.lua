@@ -37,12 +37,10 @@ local function createMerchantNPC()
     local npc = Instance.new("Part")
     npc.Name = MERCHANT_NAME
     npc.Size = Vector3.new(4, 8, 4)
-    npc.Position = Vector3.new(15, 4, -10)
+    npc.Position = Vector3.new(-25, 4.5, 23) -- Matches LobbyBuilder visual
     npc.Anchored = true
     npc.CanCollide = true
-    npc.Color = Color3.fromRGB(80, 60, 120) -- Purple merchant
-    npc.Material = Enum.Material.SmoothPlastic
-    npc.Shape = Enum.PartType.Block
+    npc.Transparency = 1 -- Invisible hitbox
     npc.Parent = Workspace
 
     -- Prompt
@@ -51,25 +49,11 @@ local function createMerchantNPC()
     prompt.ActionText = "Open Shop"
     prompt.HoldDuration = 0
     prompt.MaxActivationDistance = 10
+    prompt.RequiresLineOfSight = false -- Ensure accessible through counter
     prompt.Parent = npc
 
-    -- Billboard
-    local billboard = Instance.new("BillboardGui")
-    billboard.Size = UDim2.new(0, 220, 0, 50)
-    billboard.StudsOffset = Vector3.new(0, 5, 0)
-    billboard.AlwaysOnTop = false
-    billboard.MaxDistance = 50
-    billboard.Parent = npc
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = "💰 MERCHANT"
-    label.TextColor3 = Color3.fromRGB(255, 215, 0)
-    label.TextSize = 22
-    label.Font = Enum.Font.GothamBold
-    label.TextStrokeTransparency = 0.5
-    label.Parent = billboard
+    -- Note: LobbyBuilder creates the visual NPC and Billboard
+    print("[MerchantService] Created Merchant Interaction Point at " .. tostring(npc.Position))
 
     -- Connect prompt
     prompt.Triggered:Connect(function(player)

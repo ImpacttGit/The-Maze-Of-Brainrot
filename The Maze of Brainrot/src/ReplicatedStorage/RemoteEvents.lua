@@ -49,14 +49,15 @@ local REMOTE_NAMES = {
     "TradeUpResult",
     "OpenMerchant",
     "OpenTradeUp",
-    "RequestInventoryData",
-    "InventoryData",
+    "RequestTradeUp",
+    "TradeUpResult",
 
-    -- ===== Phase 6: Crates =====
+    -- ===== Phase 6: Crate Shop =====
     "RequestCratePurchase",
     "CrateResult",
+    "OpenCrateShop",
 
-    -- ===== Phase 7: Shared Loot & Inventory =====
+    -- ===== Phase 7: Maze Mechanics =====Loot & Inventory =====
     "HideLootForPlayer",
     "RequestDropItem",
     "DropItemResult",
@@ -83,6 +84,16 @@ local REMOTE_NAMES = {
     -- ===== Phase 12: Followers =====
     "SpawnFollower",
     "RemoveFollower",
+
+    -- ===== Phase 13: Party System =====
+    "CreateParty",
+    "LeaveParty",
+    "InvitePlayer",
+    "AcceptInvite",
+    "KickPlayer",
+    "PartyUpdate",       -- Sent to clients to update UI
+    "PartyInviteReceived", -- Sent to invited player
+    "DownedState"        -- Sent when DBNO
 }
 
 --------------------------------------------------------------------------------

@@ -158,6 +158,10 @@ end
 -- INTERNAL: Get random cell position within the maze
 --------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
+-- INTERNAL: Get random cell position within the maze
+--------------------------------------------------------------------------------
+
 local function getRandomMazePosition(origin: Vector3): Vector3
     local ts = MazeConfig.TileSize
     local w = MazeConfig.GridWidth
@@ -174,77 +178,75 @@ local function getRandomMazePosition(origin: Vector3): Vector3
 end
 
 --------------------------------------------------------------------------------
--- INTERNAL: Get player position / check movement / LoS / camera
+-- INTERNAL: Player Targeting Logic (Multiplayer Support)
 --------------------------------------------------------------------------------
 
 local function getPlayerPosition(player: Player): Vector3?
-    local character = player.Character
-    if not character then return nil end
-    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not player or not player.Character then return nil end
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
     return hrp and hrp.Position or nil
 end
 
-local function isInCameraView(player: Player, entityPos: Vector3): boolean
-    local data = playerCameraData[player.UserId]
-    if not data or (tick() - data.timestamp) > 1 then return false end
-
-    local playerPos = getPlayerPosition(player)
-    if not playerPos then return false end
-
-    local dirToEntity = (entityPos - playerPos).Unit
-    local dot = dirToEntity:Dot(data.lookDirection)
-    return dot > 0.5
-end
-
-local function isPlayerMoving(player: Player): boolean
-    local character = player.Character
-    if not character then return false end
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    return hrp.AssemblyLinearVelocity.Magnitude > 1
-end
-
-local function checkKillRange(model: Model, player: Player, killRange: number): boolean
+-- Find closest valid target from a list of players
+local function getClosestPlayer(model: Model, players: {Player}): (Player?, number)
     local hrp = model.PrimaryPart
-    if not hrp then return false end
-    local playerPos = getPlayerPosition(player)
-    if not playerPos then return false end
-    return (hrp.Position - playerPos).Magnitude <= killRange
+    if not hrp then return nil, math.huge end
+    
+    local closestPlayer = nil
+    local minDistance = math.huge
+    
+    for _, player in ipairs(players) do
+        local pos = getPlayerPosition(player)
+        if pos then
+            local dist = (hrp.Position - pos).Magnitude
+            if dist < minDistance then
+                minDistance = dist
+                closestPlayer = player
+            end
+        end
+    end
+    
+    return closestPlayer, minDistance
 end
 
-local function hasLineOfSight(model: Model, player: Player): boolean
-    local hrp = model.PrimaryPart
-    if not hrp then return false end
-    local playerPos = getPlayerPosition(player)
-    if not playerPos then return false end
-
-    local direction = (playerPos - hrp.Position)
-    local distance = direction.Magnitude
-    if distance < 1 then return true end
-
-    local rayResult = Workspace:Raycast(hrp.Position, direction.Unit * distance)
-    return not rayResult or rayResult.Instance:IsDescendantOf(player.Character)
-end
-
-local function getDistanceToPlayer(model: Model, player: Player): number
-    local hrp = model.PrimaryPart
-    if not hrp then return math.huge end
-    local playerPos = getPlayerPosition(player)
-    if not playerPos then return math.huge end
-    return (hrp.Position - playerPos).Magnitude
+local function isAnyPlayerLooking(entityPos: Vector3, players: {Player}): boolean
+    for _, player in ipairs(players) do
+        local data = playerCameraData[player.UserId]
+        if data and (tick() - data.timestamp) < 1 then
+            local playerPos = getPlayerPosition(player)
+            if playerPos then
+                local dirToEntity = (entityPos - playerPos).Unit
+                local dot = dirToEntity:Dot(data.lookDirection)
+                if dot > 0.5 then
+                    return true -- At least one player is looking
+                end
+            end
+        end
+    end
+    return false
 end
 
 --------------------------------------------------------------------------------
 -- Kill check loop (runs independently from behavior @ 0.1s)
 --------------------------------------------------------------------------------
 
-local function startKillCheckLoop(model: Model, player: Player, entityDef: any, session: any)
+local function startKillCheckLoop(model: Model, players: {Player}, entityDef: any, session: any)
     task.spawn(function()
         while session.alive and model.Parent do
-            if checkKillRange(model, player, entityDef.KillRange) then
-                session.alive = false
-                session.onKill(player)
-                return
+            local hrp = model.PrimaryPart
+            if not hrp then break end
+            
+            for _, player in ipairs(players) do
+                local playerPos = getPlayerPosition(player)
+                if playerPos and (hrp.Position - playerPos).Magnitude <= entityDef.KillRange then
+                    -- Kill this player
+                    session.onKill(player)
+                    -- Don't stop session unless everyone is dead? 
+                    -- For now, kill stops that player. 
+                    -- We rely on DeathHandler to handle the logic.
+                    -- But we should probably debounce or cooldown logic here?
+                    -- Usually DeathHandler respawns them outside or shows screen.
+                end
             end
             task.wait(0.1)
         end
@@ -252,216 +254,175 @@ local function startKillCheckLoop(model: Model, player: Player, entityDef: any, 
 end
 
 --------------------------------------------------------------------------------
--- BEHAVIOR: Patrol — patrol with player-seeking bias
+-- BEHAVIORS
 --------------------------------------------------------------------------------
 
-local function behaviorPatrol(model: Model, player: Player, entityDef: any, origin: Vector3, session: any)
+local function behaviorPatrol(model: Model, players: {Player}, entityDef: any, origin: Vector3, session: any)
     while session.alive and model.Parent do
-        local target
+        local targetPos
+        local closest, dist = getClosestPlayer(model, players)
 
-        -- Player-seeking bias: chance to pick player's location
-        if math.random() < entityDef.PlayerSeekChance then
-            local playerPos = getPlayerPosition(player)
-            if playerPos then
-                target = playerPos
-            end
+        -- Player-seeking bias
+        if closest and math.random() < entityDef.PlayerSeekChance then
+            targetPos = getPlayerPosition(closest)
+        end
+        if not targetPos then
+            targetPos = getRandomMazePosition(origin)
         end
 
-        if not target then
-            target = getRandomMazePosition(origin)
-        end
+        navigateTo(model, targetPos, entityDef.Speed)
 
-        navigateTo(model, target, entityDef.Speed)
-
-        -- If near player, pursue for PursuitDuration
-        local dist = getDistanceToPlayer(model, player)
-        if dist < entityDef.DetectionRange then
+        -- Pursuit
+        if closest and dist < entityDef.DetectionRange then
             local pursuitEnd = tick() + entityDef.PursuitDuration
             while session.alive and model.Parent and tick() < pursuitEnd do
-                local playerPos = getPlayerPosition(player)
-                if playerPos then
-                    navigateTo(model, playerPos, entityDef.Speed * 1.1)
-                end
-
-                -- Stop pursuit if too far
-                if getDistanceToPlayer(model, player) > entityDef.LoseInterestRange then
-                    break
+                -- Re-evaluate closest player constantly
+                local newClosest, newDist = getClosestPlayer(model, players)
+                if newClosest then
+                    local pPos = getPlayerPosition(newClosest)
+                    if pPos then
+                        navigateTo(model, pPos, entityDef.Speed * 1.1)
+                    end
+                    if newDist > entityDef.LoseInterestRange then break end
+                else
+                    break -- No players found
                 end
                 task.wait(0.2)
             end
         end
-
         task.wait(0.3)
     end
 end
 
---------------------------------------------------------------------------------
--- BEHAVIOR: Stalk — move toward player when player moves, approach otherwise
---------------------------------------------------------------------------------
-
-local function behaviorStalk(model: Model, player: Player, entityDef: any, origin: Vector3, session: any)
+local function behaviorStalk(model: Model, players: {Player}, entityDef: any, origin: Vector3, session: any)
     while session.alive and model.Parent do
-        local dist = getDistanceToPlayer(model, player)
-
-        if dist < entityDef.DetectionRange then
-            -- Active pursuit mode
-            if isPlayerMoving(player) then
-                local playerPos = getPlayerPosition(player)
-                if playerPos then
-                    navigateTo(model, playerPos, entityDef.Speed)
-                end
-            else
-                -- Player stopped — slowly creep closer
-                local playerPos = getPlayerPosition(player)
-                if playerPos then
-                    navigateTo(model, playerPos, entityDef.Speed * 0.4)
-                end
-            end
+        local closest, dist = getClosestPlayer(model, players)
+        
+        if closest and dist < entityDef.DetectionRange then
+             -- Active pursuit
+             local pPos = getPlayerPosition(closest)
+             if pPos then
+                 -- If moving, chase fast. If stopped, creep.
+                 local isMoving = closest.Character and closest.Character.HumanoidRootPart.AssemblyLinearVelocity.Magnitude > 1
+                 if isMoving then
+                     navigateTo(model, pPos, entityDef.Speed)
+                 else
+                     navigateTo(model, pPos, entityDef.Speed * 0.4)
+                 end
+             end
         else
-            -- Wander toward player with bias
-            if math.random() < entityDef.PlayerSeekChance then
-                local playerPos = getPlayerPosition(player)
-                if playerPos then
-                    navigateTo(model, playerPos, entityDef.Speed * 0.7)
-                end
+            -- Wander
+            if closest and math.random() < entityDef.PlayerSeekChance then
+                 local pPos = getPlayerPosition(closest)
+                 if pPos then navigateTo(model, pPos, entityDef.Speed * 0.7) end
             else
                 local target = getRandomMazePosition(origin)
                 navigateTo(model, target, entityDef.Speed * 0.6)
             end
         end
-
         task.wait(0.2)
     end
 end
 
---------------------------------------------------------------------------------
--- BEHAVIOR: Chase — wander until LoS, then chase persistently
---------------------------------------------------------------------------------
-
-local function behaviorChase(model: Model, player: Player, entityDef: any, origin: Vector3, session: any)
+local function behaviorChase(model: Model, players: {Player}, entityDef: any, origin: Vector3, session: any)
     local isChasing = false
-    local lastKnownPos: Vector3? = nil
+    local lastKnownPos = nil
     local chaseLostTime = 0
-
+    
     while session.alive and model.Parent do
-        local playerPos = getPlayerPosition(player)
-        local dist = getDistanceToPlayer(model, player)
+        local closest, dist = getClosestPlayer(model, players)
+        local canSee = false
+        if closest then
+            canSee = hasLineOfSight(model, closest)
+        end
 
-        if dist < entityDef.DetectionRange and hasLineOfSight(model, player) then
+        if closest and dist < entityDef.DetectionRange and canSee then
             isChasing = true
-            lastKnownPos = playerPos
+            lastKnownPos = getPlayerPosition(closest)
             chaseLostTime = 0
         elseif isChasing then
-            -- Lost sight — keep chasing last known position for PursuitDuration
             chaseLostTime += 0.3
-            if chaseLostTime > entityDef.PursuitDuration or dist > entityDef.LoseInterestRange then
+            if chaseLostTime > entityDef.PursuitDuration or (closest and dist > entityDef.LoseInterestRange) then
                 isChasing = false
                 lastKnownPos = nil
             end
         end
 
         if isChasing then
-            local target = playerPos or lastKnownPos
+            local target = (closest and getPlayerPosition(closest)) or lastKnownPos
             if target then
                 navigateTo(model, target, entityDef.Speed)
             end
         else
-            -- Wander with player-seeking bias
-            if math.random() < entityDef.PlayerSeekChance then
-                local pp = getPlayerPosition(player)
-                if pp then
-                    navigateTo(model, pp, entityDef.Speed * 0.8)
-                end
-            else
+            -- Wander
+             if closest and math.random() < entityDef.PlayerSeekChance then
+                local pPos = getPlayerPosition(closest)
+                if pPos then navigateTo(model, pPos, entityDef.Speed * 0.8) end
+             else
                 local target = getRandomMazePosition(origin)
                 navigateTo(model, target, entityDef.Speed)
-            end
+             end
         end
-
         task.wait(0.3)
     end
 end
 
---------------------------------------------------------------------------------
--- BEHAVIOR: Camera — SCP-173 style, now teleports when not watched
---------------------------------------------------------------------------------
-
-local function behaviorCamera(model: Model, player: Player, entityDef: any, origin: Vector3, session: any)
+local function behaviorCamera(model: Model, players: {Player}, entityDef: any, origin: Vector3, session: any)
     local teleportCooldown = 0
-
     while session.alive and model.Parent do
         local entityPos = model.PrimaryPart and model.PrimaryPart.Position
-
-        if entityPos and not isInCameraView(player, entityPos) then
-            -- NOT being watched — MOVE FAST toward player
-            local playerPos = getPlayerPosition(player)
-            if playerPos then
-                local humanoid = model:FindFirstChildWhichIsA("Humanoid")
-                if humanoid then
-                    humanoid.WalkSpeed = entityDef.Speed * 1.3
-                    humanoid:MoveTo(playerPos)
-                end
-            end
-
-            -- Occasional teleport to nearby cell (terrifying)
-            teleportCooldown += 0.15
-            if teleportCooldown > 8 and math.random() < 0.15 then
-                local pp = getPlayerPosition(player)
-                if pp and model.PrimaryPart then
-                    -- Teleport to a position near (but not on top of) the player
-                    local offset = Vector3.new(
-                        math.random(-3, 3) * MazeConfig.TileSize / 2,
-                        0,
-                        math.random(-3, 3) * MazeConfig.TileSize / 2
-                    )
-                    local teleportPos = pp + offset
-                    model:SetPrimaryPartCFrame(CFrame.new(teleportPos.X, pp.Y, teleportPos.Z))
-                    teleportCooldown = 0
-                end
-            end
+        
+        if entityPos and not isAnyPlayerLooking(entityPos, players) then
+             -- Not watched - move fast to closest
+             local closest, dist = getClosestPlayer(model, players)
+             if closest then
+                 local pPos = getPlayerPosition(closest)
+                 if pPos then
+                     local humanoid = model:FindFirstChildWhichIsA("Humanoid")
+                     if humanoid then
+                         humanoid.WalkSpeed = entityDef.Speed * 1.3
+                         humanoid:MoveTo(pPos)
+                     end
+                 end
+                 
+                 -- Teleport logic
+                 teleportCooldown += 0.15
+                 if teleportCooldown > 8 and math.random() < 0.15 then
+                     local offset = Vector3.new(math.random(-3,3)*MazeConfig.TileSize/2, 0, math.random(-3,3)*MazeConfig.TileSize/2)
+                     local tpPos = pPos + offset
+                     model:SetPrimaryPartCFrame(CFrame.new(tpPos.X, pPos.Y, tpPos.Z))
+                     teleportCooldown = 0
+                 end
+             end
         else
-            -- Being watched — FREEZE
+            -- Watched - freeze
             local humanoid = model:FindFirstChildWhichIsA("Humanoid")
-            if humanoid then
+            if humanoid and model.PrimaryPart then
                 humanoid:MoveTo(model.PrimaryPart.Position)
             end
         end
-
         task.wait(0.15)
     end
 end
 
---------------------------------------------------------------------------------
--- BEHAVIOR: Erratic — unpredictable with player-seeking bias
---------------------------------------------------------------------------------
-
-local function behaviorErratic(model: Model, player: Player, entityDef: any, origin: Vector3, session: any)
+local function behaviorErratic(model: Model, players: {Player}, entityDef: any, origin: Vector3, session: any)
     while session.alive and model.Parent do
+        local closest, dist = getClosestPlayer(model, players)
         local action = math.random()
-
-        if action < entityDef.PlayerSeekChance then
-            -- Seek player
-            local playerPos = getPlayerPosition(player)
-            if playerPos then
-                navigateTo(model, playerPos, entityDef.Speed * (0.8 + math.random() * 0.6))
-            end
+        
+        if closest and action < entityDef.PlayerSeekChance then
+            local pPos = getPlayerPosition(closest)
+            if pPos then navigateTo(model, pPos, entityDef.Speed * (0.8 + math.random()*0.6)) end
         elseif action < 0.8 then
-            -- Random wander
             local target = getRandomMazePosition(origin)
-            navigateTo(model, target, entityDef.Speed * (0.5 + math.random() * 1))
+            navigateTo(model, target, entityDef.Speed * (0.5 + math.random()))
         else
-            -- Pause with chance of sudden rush
-            task.wait(math.random() * 2 + 0.5)
-
-            -- 50% chance of sudden sprint toward player
-            if math.random() < 0.5 then
-                local playerPos = getPlayerPosition(player)
-                if playerPos then
-                    navigateTo(model, playerPos, entityDef.Speed * 1.5)
-                end
+            task.wait(math.random()*2 + 0.5)
+            if closest and math.random() < 0.5 then
+                local pPos = getPlayerPosition(closest)
+                 if pPos then navigateTo(model, pPos, entityDef.Speed * 1.5) end
             end
         end
-
         task.wait(0.3)
     end
 end
@@ -477,27 +438,25 @@ local BEHAVIORS = {
 
 --------------------------------------------------------------------------------
 -- PUBLIC: Spawn an entity for a player's maze run
+-- Modified: targetPlayers is now a LIST {Player}
 --------------------------------------------------------------------------------
 
-function EntityManager.spawnEntity(player: Player, mazeFolder: Folder, origin: Vector3, onKillCallback: (Player) -> ())
+function EntityManager.spawnEntity(targetPlayers: {Player}, mazeFolder: Folder, origin: Vector3, onKillCallback: (Player) -> ())
+    -- Validate players
+    if type(targetPlayers) ~= "table" then
+        -- Backwards compatibility or error fix: if passed single player, wrap it
+        targetPlayers = {targetPlayers}
+    end
+    
+    local mainPlayer = targetPlayers[1] -- Should prevent nil key
+    if not mainPlayer then return end
+
     -- Pick a random entity type
     local entityId = EntityConfig.EntityIds[math.random(1, #EntityConfig.EntityIds)]
     local entityDef = EntityConfig.Entities[entityId]
 
     -- Spawn at a random position (not too close to start)
     local spawnPos = getRandomMazePosition(origin)
-    local startPos = Vector3.new(
-        origin.X + MazeConfig.TileSize / 2,
-        origin.Y + 3,
-        origin.Z + MazeConfig.TileSize / 2
-    )
-
-    local attempts = 0
-    while (spawnPos - startPos).Magnitude < MazeConfig.TileSize * 3 and attempts < 20 do
-        spawnPos = getRandomMazePosition(origin)
-        attempts += 1
-    end
-
     local spawnCFrame = CFrame.new(spawnPos)
 
     -- Create the entity model
@@ -509,23 +468,34 @@ function EntityManager.spawnEntity(player: Player, mazeFolder: Folder, origin: V
         alive = true,
         entityDef = entityDef,
         onKill = onKillCallback,
+        players = targetPlayers -- Keep reference for behavior
     }
 
-    activeEntities[player.UserId] = session
+    -- Store active entity session (Keyed by Leader ID for now, or we can use a generated ID)
+    -- But ElevatorService manages cleanup.
+    -- ElevatorService calls EntityManager.cleanup(player)
+    -- We need to map *each* player to this session? Or just the leader?
+    -- If we key by leader, cleanup via other players might fail.
+    -- Let's map activeEntities[player.UserId] = session for ALL players in list.
+    for _, p in ipairs(targetPlayers) do
+        activeEntities[p.UserId] = session
+    end
 
-    -- Start position broadcasting
+    -- Start position broadcasting to ALL targets
     task.spawn(function()
         while session.alive and model.Parent do
             local hrp = model.PrimaryPart
             if hrp then
-                Remotes.EntityPosition:FireClient(player, hrp.Position)
+                for _, p in ipairs(targetPlayers) do
+                    Remotes.EntityPosition:FireClient(p, hrp.Position)
+                end
             end
             task.wait(EntityConfig.PositionUpdateRate)
         end
     end)
 
     -- Start fast kill check loop
-    startKillCheckLoop(model, player, entityDef, session)
+    startKillCheckLoop(model, targetPlayers, entityDef, session)
 
     -- Start AI behavior after spawn delay
     task.spawn(function()
@@ -534,13 +504,13 @@ function EntityManager.spawnEntity(player: Player, mazeFolder: Folder, origin: V
 
         local behaviorFn = BEHAVIORS[entityDef.BehaviorType]
         if behaviorFn then
-            behaviorFn(model, player, entityDef, origin, session)
+            behaviorFn(model, targetPlayers, entityDef, origin, session)
         else
             warn("[EntityManager] Unknown behavior: " .. entityDef.BehaviorType)
         end
     end)
 
-    print("[EntityManager] Spawned " .. entityDef.Name .. " for " .. player.Name)
+    print("[EntityManager] Spawned " .. entityDef.Name .. " targeting " .. #targetPlayers .. " players")
     return model, entityDef.Name
 end
 
@@ -555,10 +525,41 @@ function EntityManager.cleanup(player: Player)
         if session.model and session.model.Parent then
             session.model:Destroy()
         end
+        -- Remove reference for this player
         activeEntities[player.UserId] = nil
-        print("[EntityManager] Cleaned up entity for " .. player.Name)
+        
+        -- Also clear for other players in the same session?
+        -- Yes, if session is shared, we should clear it for everyone to avoid leaks/errors.
+        if session.players then
+            for _, p in ipairs(session.players) do
+                 activeEntities[p.UserId] = nil
+            end
+        end
+        
+        print("[EntityManager] Cleaned up entity session")
     end
 end
+
+--------------------------------------------------------------------------------
+-- PUBLIC: Check if a player has an active entity
+--------------------------------------------------------------------------------
+
+function EntityManager.hasActiveEntity(player: Player): boolean
+    return activeEntities[player.UserId] ~= nil
+end
+
+--------------------------------------------------------------------------------
+-- Cleanup on player leave
+--------------------------------------------------------------------------------
+
+Players.PlayerRemoving:Connect(function(player)
+    EntityManager.cleanup(player)
+    playerCameraData[player.UserId] = nil
+end)
+
+print("[EntityManager] Initialized")
+
+return EntityManager
 
 --------------------------------------------------------------------------------
 -- PUBLIC: Check if a player has an active entity

@@ -17,6 +17,10 @@ local toggleCrateShop = Instance.new("BindableEvent")
 toggleCrateShop.Name = "ToggleCrateShop"
 toggleCrateShop.Parent = ReplicatedStorage
 
+local togglePartyUI = Instance.new("BindableEvent")
+togglePartyUI.Name = "TogglePartyUI"
+togglePartyUI.Parent = ReplicatedStorage
+
 local PlayerManager = require(ServerScriptService:WaitForChild("PlayerManager"))
 print("[Boot_Core] PlayerManager loaded ✓")
 

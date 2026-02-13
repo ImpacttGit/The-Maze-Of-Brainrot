@@ -41,12 +41,8 @@ local processingDeath = {} -- { [UserId] = true }
 -- PUBLIC: Handle a player being killed by an entity
 --------------------------------------------------------------------------------
 
-function DeathHandler.onEntityKill(player: Player)
-    if not player or not player.Parent then return end
-    if processingDeath[player.UserId] then return end
-    processingDeath[player.UserId] = true
-
-    print("[DeathHandler] " .. player.Name .. " was caught by an entity!")
+local function executeDeath(player: Player)
+    print("[DeathHandler] Executing final death for " .. player.Name)
 
     -- 1. Clear non-Legendary items from inventory
     local removedItems = PlayerManager.onPlayerDeath(player)
@@ -79,6 +75,33 @@ function DeathHandler.onEntityKill(player: Player)
 
     processingDeath[player.UserId] = nil
     print("[DeathHandler] " .. player.Name .. " returned to Hub")
+end
+
+--------------------------------------------------------------------------------
+-- PUBLIC: Handle a player being killed by an entity
+--------------------------------------------------------------------------------
+
+function DeathHandler.onEntityKill(player: Player)
+    if not player or not player.Parent then return end
+    if processingDeath[player.UserId] then return end
+    processingDeath[player.UserId] = true
+
+    print("[DeathHandler] " .. player.Name .. " was caught by an entity!")
+    
+    -- Attempt DBNO (Down But Not Out)
+    local ReviveService = require(ServerScriptService:WaitForChild("ReviveService"))
+    
+    ReviveService.attemptDownPlayer(player, 
+        function(victim)
+            -- Final Death Callback
+            executeDeath(victim)
+        end,
+        function(revivedPlayer)
+            -- Revive Callback
+            processingDeath[revivedPlayer.UserId] = nil
+            print("[DeathHandler] " .. revivedPlayer.Name .. " revived. Death processing cleared.")
+        end
+    )
 end
 
 --------------------------------------------------------------------------------

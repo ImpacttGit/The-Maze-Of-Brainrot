@@ -386,8 +386,14 @@ local function buildHUD()
     local passBtn = createButton("PASSES", "⚡", COLORS.FragmentGold, btnContainer)
     passBtn.MouseButton1Click:Connect(function()
         Remotes.CheckGamePasses:FireServer()
-        -- GamePassClient should handle the UI showing locally
-        -- Ideally we'd toggle GamePassClient UI here too
+    end)
+    
+    local partyBtn = createButton("PARTY", "👥", COLORS.AccentPurple, btnContainer)
+    partyBtn.MouseButton1Click:Connect(function()
+        local toggleEvent = ReplicatedStorage:FindFirstChild("TogglePartyUI")
+        if toggleEvent then
+            toggleEvent:Fire()
+        end
     end)
 
     --------------------------------------------------------------------------
@@ -525,6 +531,53 @@ Remotes.UpdateLevel.OnClientEvent:Connect(function(newLevel)
         end
         levelLabel.TextColor3 = originalColor
     end
+end)
+
+
+--------------------------------------------------------------------------------
+-- DOWNED STATE VISUALS
+--------------------------------------------------------------------------------
+
+local downedOverlay
+local downedText
+
+local function createDownedVisuals()
+    downedOverlay = Instance.new("Frame")
+    downedOverlay.Name = "DownedOverlay"
+    downedOverlay.Size = UDim2.new(1, 0, 1, 0)
+    downedOverlay.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    downedOverlay.BackgroundTransparency = 1
+    downedOverlay.ZIndex = 0 -- Behind HUD
+    downedOverlay.Parent = PlayerGui:WaitForChild("MainHUD")
+
+    downedText = Instance.new("TextLabel")
+    downedText.Name = "DownedText"
+    downedText.Size = UDim2.new(1, 0, 0, 100)
+    downedText.Position = UDim2.new(0, 0, 0.5, -50)
+    downedText.BackgroundTransparency = 1
+    downedText.Text = "DOWNED\nCRAWL TO A TEAMMATE"
+    downedText.TextColor3 = Color3.fromRGB(255, 50, 50)
+    downedText.TextSize = 48
+    downedText.Font = FONTS.Bold
+    downedText.TextTransparency = 1
+    downedText.Parent = PlayerGui.MainHUD
+end
+
+if PlayerGui:FindFirstChild("MainHUD") then
+    createDownedVisuals()
+end
+
+Remotes.DownedState.OnClientEvent:Connect(function(isDowned)
+    if not downedOverlay then return end
+    
+    local targetTrans = isDowned and 0.6 or 1
+    local textTrans = isDowned and 0 or 1
+    
+    TweenService:Create(downedOverlay, TWEEN_INFO, {BackgroundTransparency = targetTrans}):Play()
+    TweenService:Create(downedText, TWEEN_INFO, {TextTransparency = textTrans}):Play()
+    
+    -- Optional: Color Correction Effect? 
+    -- For MVP, the red overlay is enough.
 end)
 
 --------------------------------------------------------------------------------

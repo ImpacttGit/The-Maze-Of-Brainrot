@@ -78,6 +78,9 @@
                 "CrateResult": {
                     "$className": "RemoteEvent"
                 },
+                "OpenCrateShop": {
+                    "$className": "RemoteEvent"
+                },
                 "HideLootForPlayer": {
                     "$className": "RemoteEvent"
                 },
@@ -124,6 +127,30 @@
                     "$className": "RemoteEvent"
                 },
                 "RemoveFollower": {
+                    "$className": "RemoteEvent"
+                },
+                "CreateParty": {
+                    "$className": "RemoteEvent"
+                },
+                "LeaveParty": {
+                    "$className": "RemoteEvent"
+                },
+                "InvitePlayer": {
+                    "$className": "RemoteEvent"
+                },
+                "AcceptInvite": {
+                    "$className": "RemoteEvent"
+                },
+                "KickPlayer": {
+                    "$className": "RemoteEvent"
+                },
+                "PartyUpdate": {
+                    "$className": "RemoteEvent"
+                },
+                "PartyInviteReceived": {
+                    "$className": "RemoteEvent"
+                },
+                "DownedState": {
                     "$className": "RemoteEvent"
                 }
             }

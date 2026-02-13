@@ -50,6 +50,39 @@ local function rollCrateRarity(crateDef: any): string
 end
 
 --------------------------------------------------------------------------------
+-- Create Crate Shop Interaction Point
+--------------------------------------------------------------------------------
+
+local function createCrateShopInteraction()
+    if Workspace:FindFirstChild("CrateShopInteraction") then return end
+
+    local part = Instance.new("Part")
+    part.Name = "CrateShopInteraction"
+    part.Size = Vector3.new(16, 6, 4)
+    part.Position = Vector3.new(25, 3, 18) -- Matches LobbyBuilder visual
+    part.Anchored = true
+    part.CanCollide = true
+    part.Transparency = 1 -- Invisible hitbox
+    part.Parent = Workspace
+
+    local prompt = Instance.new("ProximityPrompt")
+    prompt.ObjectText = "Crate Shop"
+    prompt.ActionText = "Open Shop"
+    prompt.HoldDuration = 0
+    prompt.MaxActivationDistance = 14
+    prompt.RequiresLineOfSight = false
+    prompt.Parent = part
+
+    prompt.Triggered:Connect(function(player)
+        Remotes.OpenCrateShop:FireClient(player)
+    end)
+
+    print("[CrateService] Created Crate Shop Interaction Point at " .. tostring(part.Position))
+end
+
+createCrateShopInteraction()
+
+--------------------------------------------------------------------------------
 -- Pending Robux purchases (track which crate the player is buying)
 --------------------------------------------------------------------------------
 
