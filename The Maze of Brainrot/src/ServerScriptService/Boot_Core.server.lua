@@ -4,11 +4,18 @@
     Auto-running Script — bootstraps core systems.
     
     Loads PlayerManager, builds the lobby, and starts the game pass service.
+    Creates shared bindable events for client-client communication.
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 print("[Boot_Core] Starting core systems...")
+
+-- Create shared events
+local toggleCrateShop = Instance.new("BindableEvent")
+toggleCrateShop.Name = "ToggleCrateShop"
+toggleCrateShop.Parent = ReplicatedStorage
 
 local PlayerManager = require(ServerScriptService:WaitForChild("PlayerManager"))
 print("[Boot_Core] PlayerManager loaded ✓")

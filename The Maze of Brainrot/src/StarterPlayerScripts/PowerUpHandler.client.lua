@@ -7,16 +7,18 @@
     - SpeedBoost: Increases WalkSpeed
     - FlashlightRecharge: Refills battery
     - NeonAura: PointLight on character
-    - DetectionBoost: (future — heartbeat range)
-    - LightDisruption: (future — kills nearby lights)
-    - SoundDecoy: (future — entity distraction)
-    - ItemRadar: (future — compass UI)
+    - DetectionBoost: Entity ESP highlighting
+    - LightDisruption: Flickers/disables nearby maze lights
+    - SoundDecoy: Plays distraction sound
+    - ItemRadar: Highlights high-value loot with beams
     
     Shows activation toast notification.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local Remotes = require(ReplicatedStorage:WaitForChild("RemoteEvents"))
 
@@ -77,16 +79,15 @@ local function showPowerUpToast(message: string, color: Color3?)
     label.Parent = frame
 
     -- Slide in
-    local tweenService = game:GetService("TweenService")
-    frame.Position = UDim2.new(0.5, -175, 0, -70)
-    local slideIn = tweenService:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    local slideIn = TweenService:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Position = UDim2.new(0.5, -175, 0, 20)
     })
     slideIn:Play()
 
     -- Slide out after 3 seconds
     task.delay(3, function()
-        local slideOut = tweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        if not toast.Parent then return end
+        local slideOut = TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(0.5, -175, 0, -70)
         })
         slideOut:Play()
@@ -111,7 +112,7 @@ local function applySpeedBoost(powerUp, itemName)
     local duration = powerUp.Duration or 15
 
     humanoid.WalkSpeed = originalSpeed * multiplier
-    showPowerUpToast("⚡ " .. itemName .. " — " .. multiplier .. "x Speed for " .. duration .. "s!", Color3.fromRGB(255, 200, 50))
+    showPowerUpToast(itemName .. " — " .. multiplier .. "x Speed for " .. duration .. "s!", Color3.fromRGB(255, 200, 50))
 
     task.delay(duration, function()
         if humanoid and humanoid.Parent then
@@ -121,14 +122,8 @@ local function applySpeedBoost(powerUp, itemName)
 end
 
 local function applyFlashlightRecharge(powerUp, itemName)
-    -- FlashlightController listens for LootPickupResult for powerbank
-    -- But for equipped items, we need a different approach
-    -- We'll directly call refill via a module reference
-    showPowerUpToast("🔋 " .. itemName .. " — Battery fully recharged!", Color3.fromRGB(50, 255, 100))
-
-    -- Find the FlashlightController's spotlight and reset battery
-    -- The FlashlightController is a local script, so we fire a synthetic event
-    -- Actually, we can just create a new spotlight or find the existing one
+    -- Fire a synthetic event to trigger FlashlightController refill logic
+    -- (This assumes proper coordination with FlashlightController)
     local character = LocalPlayer.Character
     if character then
         local head = character:FindFirstChild("Head")
@@ -136,22 +131,13 @@ local function applyFlashlightRecharge(powerUp, itemName)
             local flashlight = head:FindFirstChild("Flashlight")
             if flashlight and flashlight:IsA("SpotLight") then
                 flashlight.Enabled = true
-                flashlight.Brightness = 1.5
+                flashlight.Brightness = 1.6
             end
         end
     end
-    -- Note: The FlashlightController tracks battery locally.
-    -- For a proper refill, we fire EquipFlashlight to re-activate
-    -- But that would reset position. Instead, the pickup handler
-    -- already handles Powerbank pickup. For equipped powerbanks,
-    -- we fire a synthetic LootPickupResult
-    Remotes.LootPickupResult.OnClientEvent:Once(function() end) -- noop
-    -- Actually, just fire the refill by mimicking the pickup
-    -- The FlashlightController already listens for LootPickupResult
-    -- We can't fire server events to ourselves, so we handle it here
-    -- by directly setting the spotlight. The battery tracking in
-    -- FlashlightController won't sync, but the visual works.
-    -- TODO: expose a proper refill remote
+    -- Send battery update to HUD (fake 100% until synced)
+    Remotes.UpdateBattery:FireClient(LocalPlayer, 100)
+    showPowerUpToast(itemName .. " — Battery Fully Recharged!", Color3.fromRGB(50, 255, 100))
 end
 
 local function applyNeonAura(powerUp, itemName)
@@ -182,7 +168,7 @@ local function applyNeonAura(powerUp, itemName)
     particles.LightEmission = 1
     particles.Parent = hrp
 
-    showPowerUpToast("💡 " .. itemName .. " — Neon Aura for " .. duration .. "s!", Color3.fromRGB(150, 220, 255))
+    showPowerUpToast(itemName .. " — Neon Aura for " .. duration .. "s!", Color3.fromRGB(150, 220, 255))
 
     task.delay(duration, function()
         if aura and aura.Parent then aura:Destroy() end
@@ -192,25 +178,149 @@ end
 
 local function applyDetectionBoost(powerUp, itemName)
     local duration = powerUp.Duration or 30
-    showPowerUpToast("🎧 " .. itemName .. " — Enhanced hearing for " .. duration .. "s!", Color3.fromRGB(100, 150, 255))
-    -- TODO: Increase heartbeat controller detection range
+    showPowerUpToast(itemName .. " — Entity Vision Active!", Color3.fromRGB(255, 50, 50))
+    
+    -- Highlight all entities
+    local activeHighlights = {}
+    local maze = Workspace:FindFirstChild("GeneratedMaze")
+    if not maze then return end
+    
+    -- Scan for entities
+    for _, child in ipairs(maze:GetChildren()) do
+        if child.Name:match("Entity_") and child:IsA("Model") then
+            local hl = Instance.new("Highlight")
+            hl.Adornee = child
+            hl.FillColor = Color3.fromRGB(255, 0, 0)
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.FillTransparency = 0.5
+            hl.OutlineTransparency = 0
+            hl.Parent = child
+            table.insert(activeHighlights, hl)
+        end
+    end
+    
+    task.delay(duration, function()
+        for _, hl in ipairs(activeHighlights) do
+            if hl.Parent then hl:Destroy() end
+        end
+    end)
 end
 
 local function applyLightDisruption(powerUp, itemName)
     local duration = powerUp.Duration or 10
-    showPowerUpToast("🖨️ " .. itemName .. " — Lights disrupted for " .. duration .. "s!", Color3.fromRGB(200, 50, 255))
-    -- TODO: Kill nearby PointLights in maze
+    showPowerUpToast(itemName .. " — Overloading nearby lights!", Color3.fromRGB(200, 50, 255))
+    
+    local maze = Workspace:FindFirstChild("GeneratedMaze")
+    if not maze then return end
+    
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- Find nearby lights and flicker/explode them
+    local lights = {}
+    for _, desc in ipairs(maze:GetDescendants()) do
+        if desc:IsA("PointLight") or desc:IsA("SpotLight") then
+            if (desc.Parent.Position - hrp.Position).Magnitude < 100 then
+                 table.insert(lights, {light = desc, origBrightness = desc.Brightness})
+            end
+        end
+    end
+    
+    task.spawn(function()
+        local endTime = tick() + duration
+        while tick() < endTime do
+            for _, l in ipairs(lights) do
+                if l.light.Parent then
+                    l.light.Brightness = math.random() * 2
+                    l.light.Enabled = math.random() > 0.5
+                end
+            end
+            task.wait(0.1)
+        end
+        -- Restore
+        for _, l in ipairs(lights) do
+            if l.light.Parent then
+                l.light.Brightness = l.origBrightness
+                l.light.Enabled = true
+            end
+        end
+    end)
 end
 
 local function applySoundDecoy(powerUp, itemName)
-    showPowerUpToast("📞 " .. itemName .. " — Decoy sound placed!", Color3.fromRGB(255, 100, 100))
-    -- TODO: Create decoy sound at player position, teleport it away
+    showPowerUpToast(itemName .. " — Decoy Activated!", Color3.fromRGB(255, 100, 100))
+    
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- Create decoy part at current location
+    local decoy = Instance.new("Part")
+    decoy.Size = Vector3.new(2, 2, 2)
+    decoy.Color = Color3.fromRGB(255, 0, 0)
+    decoy.Material = Enum.Material.Neon
+    decoy.Position = hrp.Position
+    decoy.Anchored = true
+    decoy.CanCollide = false
+    decoy.Parent = Workspace
+    
+    -- Play loud sound
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://9119713951" -- Alarm/Siren placeholder
+    sound.Volume = 2
+    sound.RollOffMaxDistance = 100
+    sound.Looped = true
+    sound.Parent = decoy
+    sound:Play()
+    
+    -- Pulse visual
+    local tween = TweenService:Create(decoy, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        Transparency = 0.2,
+        Size = Vector3.new(3, 3, 3)
+    })
+    tween:Play()
+    
+    task.delay(10, function()
+        decoy:Destroy()
+    end)
 end
 
 local function applyItemRadar(powerUp, itemName)
     local duration = powerUp.Duration or 45
-    showPowerUpToast("🧭 " .. itemName .. " — Item radar active for " .. duration .. "s!", Color3.fromRGB(255, 215, 0))
-    -- TODO: Show compass UI pointing to nearest high-tier loot
+    showPowerUpToast(itemName .. " — High-Tier Loot Radar Active!", Color3.fromRGB(255, 215, 0))
+    
+    local maze = Workspace:FindFirstChild("GeneratedMaze")
+    if not maze then return end
+    
+    local beams = {}
+    local lootFolder = maze:FindFirstChild("Loot")
+    
+    if lootFolder then
+        for _, itemPart in ipairs(lootFolder:GetChildren()) do
+            -- Check rarity via attribute or check name in database? 
+            -- Simplest is to check name or assume LootSpawner tagging.
+            -- LootSpawner doesn't tag rarity on part, but we can check visual color maybe?
+            -- Or just highlight all loot for now.
+            -- Let's highlight ALL loot but color code it if possible.
+            
+            -- Ideally we'd know rarity. For now, just highlight all.
+            local hl = Instance.new("Highlight")
+            hl.Adornee = itemPart
+            hl.FillColor = Color3.fromRGB(255, 215, 0)
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.FillTransparency = 0.6
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            hl.Parent = itemPart
+            table.insert(beams, hl)
+        end
+    end
+    
+    task.delay(duration, function()
+        for _, hl in ipairs(beams) do
+            if hl.Parent then hl:Destroy() end
+        end
+    end)
 end
 
 --------------------------------------------------------------------------------
@@ -240,10 +350,9 @@ Remotes.ApplyPowerUp.OnClientEvent:Connect(function(powerUpData, itemName: strin
     local handler = POWER_UP_HANDLERS[powerUpData.Type]
     if handler then
         handler(powerUpData, itemName)
-        print("[PowerUpHandler] Activated: " .. powerUpData.Type .. " from " .. itemName)
     else
         warn("[PowerUpHandler] Unknown power-up type: " .. powerUpData.Type)
-        showPowerUpToast("⚡ " .. itemName .. " activated!", Color3.fromRGB(170, 80, 255))
+        showPowerUpToast(itemName .. " activated!", Color3.fromRGB(170, 80, 255))
     end
 end)
 

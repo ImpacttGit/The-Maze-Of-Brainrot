@@ -9,7 +9,10 @@
     UI Elements:
         1. Fragment Display (top-right) — crystal icon + balance
         2. Inventory Counter (below fragments) — "X / 20" format
-        3. Flashlight Battery Bar (bottom-left) — fill bar with color gradient
+        3. Level & XP Panel (top-left) — Level, Prestige stars, XP bar
+        4. Battery Bar (bottom-left)
+        5. Keybind Hints (bottom-center)
+        6. Shop Buttons (bottom-right) — Crates, Game Passes
     
     Design: Dark glassmorphism panels, GothamBold font, tweened animations.
 ]]
@@ -17,6 +20,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Remotes = require(ReplicatedStorage:WaitForChild("RemoteEvents"))
 
@@ -40,6 +44,8 @@ local COLORS = {
     BatteryLow = Color3.fromRGB(255, 50, 50),
     InventoryBlue = Color3.fromRGB(100, 160, 255),
     AccentPurple = Color3.fromRGB(163, 53, 238),
+    XPBlue = Color3.fromRGB(50, 150, 255),
+    PrestigeRed = Color3.fromRGB(255, 60, 60),
 }
 
 local FONTS = {
@@ -54,13 +60,16 @@ local TWEEN_INFO = TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirecti
 local TWEEN_INFO_FAST = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
 --------------------------------------------------------------------------------
--- UI References (set during creation)
+-- UI References
 --------------------------------------------------------------------------------
 
-local fragmentLabel: TextLabel = nil
-local inventoryLabel: TextLabel = nil
-local batteryFillFrame: Frame = nil
-local batteryLabel: TextLabel = nil
+local fragmentLabel: TextLabel
+local inventoryLabel: TextLabel
+local batteryFillFrame: Frame
+local batteryLabel: TextLabel
+local levelLabel: TextLabel
+local xpFillFrame: Frame
+local prestigeContainer: Frame
 
 -- Current values for smooth tweening
 local currentFragments = 0
@@ -93,6 +102,42 @@ local function createPanel(name: string, size: UDim2, position: UDim2, parent: I
     return panel
 end
 
+local function createButton(name: string, text: string, color: Color3, parent: Instance): TextButton
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Size = UDim2.new(0, 50, 0, 50)
+    btn.BackgroundColor3 = COLORS.PanelBackground
+    btn.BackgroundTransparency = 0.3
+    btn.Text = text
+    btn.TextColor3 = color
+    btn.TextSize = 24
+    btn.Font = FONTS.Bold
+    btn.Parent = parent
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = btn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.5
+    stroke.Parent = btn
+    
+    -- Subtitle
+    local sub = Instance.new("TextLabel")
+    sub.Size = UDim2.new(1, 0, 0, 15)
+    sub.Position = UDim2.new(0, 0, 1, 2)
+    sub.BackgroundTransparency = 1
+    sub.Text = name
+    sub.TextColor3 = COLORS.TextSecondary
+    sub.TextSize = 10
+    sub.Font = FONTS.Medium
+    sub.Parent = btn
+
+    return btn
+end
+
 --------------------------------------------------------------------------------
 -- Build the HUD
 --------------------------------------------------------------------------------
@@ -107,7 +152,67 @@ local function buildHUD()
     screenGui.Parent = PlayerGui
 
     --------------------------------------------------------------------------
-    -- 1. FRAGMENT DISPLAY (Top-Right)
+    -- 1. LEVEL & PRESTIGE (Top-Left)
+    --------------------------------------------------------------------------
+    local levelPanel = createPanel(
+        "LevelPanel",
+        UDim2.new(0, 220, 0, 60),
+        UDim2.new(0, 15, 0, 15),
+        screenGui
+    )
+    
+    -- Level Label
+    levelLabel = Instance.new("TextLabel")
+    levelLabel.Name = "LevelLabel"
+    levelLabel.Size = UDim2.new(1, -20, 0, 25)
+    levelLabel.Position = UDim2.new(0, 10, 0, 5)
+    levelLabel.BackgroundTransparency = 1
+    levelLabel.Text = "LEVEL 1"
+    levelLabel.TextSize = 18
+    levelLabel.Font = FONTS.Bold
+    levelLabel.TextColor3 = COLORS.XPBlue
+    levelLabel.TextXAlignment = Enum.TextXAlignment.Left
+    levelLabel.Parent = levelPanel
+    
+    -- Prestige Stars Container
+    prestigeContainer = Instance.new("Frame")
+    prestigeContainer.Name = "PrestigeContainer"
+    prestigeContainer.Size = UDim2.new(0, 100, 0, 20)
+    prestigeContainer.Position = UDim2.new(0, 100, 0, 8)
+    prestigeContainer.BackgroundTransparency = 1
+    prestigeContainer.Parent = levelPanel
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.Padding = UDim.new(0, 2)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = prestigeContainer
+
+    -- XP Bar Background
+    local xpBg = Instance.new("Frame")
+    xpBg.Size = UDim2.new(1, -20, 0, 8)
+    xpBg.Position = UDim2.new(0, 10, 0, 35)
+    xpBg.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    xpBg.BorderSizePixel = 0
+    xpBg.Parent = levelPanel
+    
+    local xpCorner = Instance.new("UICorner")
+    xpCorner.CornerRadius = UDim.new(0, 4)
+    xpCorner.Parent = xpBg
+    
+    -- XP Fill
+    xpFillFrame = Instance.new("Frame")
+    xpFillFrame.Size = UDim2.new(0, 0, 1, 0)
+    xpFillFrame.BackgroundColor3 = COLORS.XPBlue
+    xpFillFrame.BorderSizePixel = 0
+    xpFillFrame.Parent = xpBg
+    
+    local xpFillCorner = Instance.new("UICorner")
+    xpFillCorner.CornerRadius = UDim.new(0, 4)
+    xpFillCorner.Parent = xpFillFrame
+
+    --------------------------------------------------------------------------
+    -- 2. FRAGMENT DISPLAY (Top-Right)
     --------------------------------------------------------------------------
     local fragPanel = createPanel(
         "FragmentPanel",
@@ -116,7 +221,6 @@ local function buildHUD()
         screenGui
     )
 
-    -- Crystal emoji / icon
     local fragIcon = Instance.new("TextLabel")
     fragIcon.Name = "FragmentIcon"
     fragIcon.Size = UDim2.new(0, 36, 1, 0)
@@ -128,7 +232,6 @@ local function buildHUD()
     fragIcon.TextColor3 = COLORS.FragmentGold
     fragIcon.Parent = fragPanel
 
-    -- Fragment count
     fragmentLabel = Instance.new("TextLabel")
     fragmentLabel.Name = "FragmentCount"
     fragmentLabel.Size = UDim2.new(1, -50, 1, 0)
@@ -141,7 +244,6 @@ local function buildHUD()
     fragmentLabel.TextXAlignment = Enum.TextXAlignment.Left
     fragmentLabel.Parent = fragPanel
 
-    -- "FRAGMENTS" subtitle
     local fragSubtitle = Instance.new("TextLabel")
     fragSubtitle.Name = "FragmentSubtitle"
     fragSubtitle.Size = UDim2.new(0, 90, 0, 14)
@@ -155,7 +257,7 @@ local function buildHUD()
     fragSubtitle.Parent = fragPanel
 
     --------------------------------------------------------------------------
-    -- 2. INVENTORY COUNTER (Below Fragments)
+    -- 3. INVENTORY COUNTER (Below Fragments)
     --------------------------------------------------------------------------
     local invPanel = createPanel(
         "InventoryPanel",
@@ -164,7 +266,6 @@ local function buildHUD()
         screenGui
     )
 
-    -- Backpack icon
     local invIcon = Instance.new("TextLabel")
     invIcon.Name = "InventoryIcon"
     invIcon.Size = UDim2.new(0, 36, 1, 0)
@@ -176,7 +277,6 @@ local function buildHUD()
     invIcon.TextColor3 = COLORS.InventoryBlue
     invIcon.Parent = invPanel
 
-    -- Inventory count
     inventoryLabel = Instance.new("TextLabel")
     inventoryLabel.Name = "InventoryCount"
     inventoryLabel.Size = UDim2.new(1, -50, 1, 0)
@@ -190,7 +290,7 @@ local function buildHUD()
     inventoryLabel.Parent = invPanel
 
     --------------------------------------------------------------------------
-    -- 3. FLASHLIGHT BATTERY BAR (Bottom-Left)
+    -- 4. FLASHLIGHT BATTERY BAR (Bottom-Left)
     --------------------------------------------------------------------------
     local battPanel = createPanel(
         "BatteryPanel",
@@ -199,7 +299,6 @@ local function buildHUD()
         screenGui
     )
 
-    -- Battery icon
     local battIcon = Instance.new("TextLabel")
     battIcon.Name = "BatteryIcon"
     battIcon.Size = UDim2.new(0, 30, 0, 20)
@@ -211,7 +310,6 @@ local function buildHUD()
     battIcon.TextColor3 = COLORS.TextPrimary
     battIcon.Parent = battPanel
 
-    -- Battery percentage text
     batteryLabel = Instance.new("TextLabel")
     batteryLabel.Name = "BatteryPercent"
     batteryLabel.Size = UDim2.new(0, 50, 0, 20)
@@ -224,9 +322,7 @@ local function buildHUD()
     batteryLabel.TextXAlignment = Enum.TextXAlignment.Right
     batteryLabel.Parent = battPanel
 
-    -- Battery bar background
     local battBarBg = Instance.new("Frame")
-    battBarBg.Name = "BatteryBarBg"
     battBarBg.Size = UDim2.new(1, -20, 0, 12)
     battBarBg.Position = UDim2.new(0, 10, 1, -18)
     battBarBg.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -238,11 +334,8 @@ local function buildHUD()
     battBarBgCorner.CornerRadius = UDim.new(0, 4)
     battBarBgCorner.Parent = battBarBg
 
-    -- Battery fill bar
     batteryFillFrame = Instance.new("Frame")
-    batteryFillFrame.Name = "BatteryFill"
-    batteryFillFrame.Size = UDim2.new(1, 0, 1, 0) -- 100% initially
-    batteryFillFrame.Position = UDim2.new(0, 0, 0, 0)
+    batteryFillFrame.Size = UDim2.new(1, 0, 1, 0)
     batteryFillFrame.BackgroundColor3 = COLORS.BatteryFull
     batteryFillFrame.BorderSizePixel = 0
     batteryFillFrame.Parent = battBarBg
@@ -251,7 +344,6 @@ local function buildHUD()
     battFillCorner.CornerRadius = UDim.new(0, 4)
     battFillCorner.Parent = batteryFillFrame
 
-    -- Subtle glow on the fill bar
     local battGlow = Instance.new("UIGradient")
     battGlow.Rotation = 90
     battGlow.Color = ColorSequence.new({
@@ -266,17 +358,67 @@ local function buildHUD()
     })
     battGlow.Parent = batteryFillFrame
 
+    --------------------------------------------------------------------------
+    -- 5. BUTTONS (Bottom-Right)
+    --------------------------------------------------------------------------
+    local btnContainer = Instance.new("Frame")
+    btnContainer.Size = UDim2.new(0, 120, 0, 60)
+    btnContainer.Position = UDim2.new(1, -140, 1, -75)
+    btnContainer.BackgroundTransparency = 1
+    btnContainer.Parent = screenGui
+    
+    local list = Instance.new("UIListLayout")
+    list.FillDirection = Enum.FillDirection.Horizontal
+    list.Padding = UDim.new(0, 15)
+    list.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    list.Parent = btnContainer
+    
+    local crateBtn = createButton("CRATES", "📦", COLORS.InventoryBlue, btnContainer)
+    crateBtn.MouseButton1Click:Connect(function()
+        local toggleEvent = ReplicatedStorage:FindFirstChild("ToggleCrateShop")
+        if toggleEvent then
+            toggleEvent:Fire()
+        else
+            warn("[HUDController] ToggleCrateShop event not found")
+        end
+    end)
+    
+    local passBtn = createButton("PASSES", "⚡", COLORS.FragmentGold, btnContainer)
+    passBtn.MouseButton1Click:Connect(function()
+        Remotes.CheckGamePasses:FireServer()
+        -- GamePassClient should handle the UI showing locally
+        -- Ideally we'd toggle GamePassClient UI here too
+    end)
+
+    --------------------------------------------------------------------------
+    -- 6. KEYBIND HINTS (Bottom-Center)
+    --------------------------------------------------------------------------
+    local hintPanel = Instance.new("Frame")
+    hintPanel.Size = UDim2.new(0, 300, 0, 30)
+    hintPanel.Position = UDim2.new(0.5, -150, 1, -40)
+    hintPanel.BackgroundTransparency = 1
+    hintPanel.Parent = screenGui
+    
+    local hintText = Instance.new("TextLabel")
+    hintText.Size = UDim2.new(1, 0, 1, 0)
+    hintText.BackgroundTransparency = 1
+    hintText.Text = "[G] INVENTORY     [F] FLASHLIGHT"
+    hintText.TextColor3 = COLORS.TextSecondary
+    hintText.TextSize = 12
+    hintText.Font = FONTS.Bold
+    hintText.TextTransparency = 0.5
+    hintText.Parent = hintPanel
+
     print("[HUDController] HUD built successfully")
 end
 
 --------------------------------------------------------------------------------
--- Update Functions (called by RemoteEvent listeners)
+-- Update Functions
 --------------------------------------------------------------------------------
 
 local function updateFragmentDisplay(newBalance: number)
     if not fragmentLabel then return end
 
-    -- Smooth count-up/down animation
     local startVal = currentFragments
     currentFragments = newBalance
 
@@ -286,7 +428,6 @@ local function updateFragmentDisplay(newBalance: number)
         while elapsed < duration do
             elapsed += task.wait()
             local alpha = math.min(elapsed / duration, 1)
-            -- Ease out
             alpha = 1 - (1 - alpha) ^ 3
             local displayVal = math.floor(startVal + (newBalance - startVal) * alpha)
             if fragmentLabel then
@@ -298,80 +439,93 @@ local function updateFragmentDisplay(newBalance: number)
         end
     end)
 
-    -- Quick scale pop effect on the panel
     if fragmentLabel.Parent then
         local panel = fragmentLabel.Parent
-        TweenService:Create(panel, TWEEN_INFO_FAST, {
-            Size = UDim2.new(0, 210, 0, 54),
-        }):Play()
+        TweenService:Create(panel, TWEEN_INFO_FAST, { Size = UDim2.new(0, 210, 0, 54) }):Play()
         task.wait(0.15)
-        TweenService:Create(panel, TWEEN_INFO, {
-            Size = UDim2.new(0, 200, 0, 50),
-        }):Play()
+        TweenService:Create(panel, TWEEN_INFO, { Size = UDim2.new(0, 200, 0, 50) }):Play()
     end
 end
 
 local function updateInventoryDisplay(count: number, maxSlots: number)
     if not inventoryLabel then return end
-
     inventoryLabel.Text = tostring(count) .. " / " .. tostring(maxSlots)
-
-    -- Change color when nearly full
     if count >= maxSlots then
-        inventoryLabel.TextColor3 = Color3.fromRGB(255, 80, 80) -- Red = FULL
+        inventoryLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
     elseif count >= maxSlots * 0.8 then
-        inventoryLabel.TextColor3 = Color3.fromRGB(255, 200, 0) -- Yellow = almost full
+        inventoryLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
     else
-        inventoryLabel.TextColor3 = COLORS.InventoryBlue -- Normal blue
+        inventoryLabel.TextColor3 = COLORS.InventoryBlue
     end
 end
 
 local function updateBatteryDisplay(percent: number)
     if not batteryFillFrame or not batteryLabel then return end
-
     percent = math.clamp(percent, 0, 100)
     currentBattery = percent
-
-    -- Determine battery color based on level
     local battColor
-    if percent > 60 then
-        battColor = COLORS.BatteryFull -- Green
-    elseif percent > 25 then
-        battColor = COLORS.BatteryMid -- Yellow
-    else
-        battColor = COLORS.BatteryLow -- Red
-    end
+    if percent > 60 then battColor = COLORS.BatteryFull
+    elseif percent > 25 then battColor = COLORS.BatteryMid
+    else battColor = COLORS.BatteryLow end
 
-    -- Tween the fill bar width and color
     TweenService:Create(batteryFillFrame, TWEEN_INFO, {
         Size = UDim2.new(percent / 100, 0, 1, 0),
         BackgroundColor3 = battColor,
     }):Play()
-
-    -- Update the percentage text
     batteryLabel.Text = tostring(math.floor(percent)) .. "%"
     batteryLabel.TextColor3 = battColor
+end
+
+local function updateXP(xp: number, level: number, prestige: number)
+    if not levelLabel or not xpFillFrame then return end
+    
+    local xpNeeded = level * 150
+    local percent = math.clamp(xp / xpNeeded, 0, 1)
+    
+    levelLabel.Text = "LEVEL " .. tostring(level)
+    TweenService:Create(xpFillFrame, TWEEN_INFO, { Size = UDim2.new(percent, 0, 1, 0) }):Play()
+    
+    -- Update stats
+    if prestigeContainer then
+        for _, child in ipairs(prestigeContainer:GetChildren()) do
+            if child:IsA("TextLabel") then child:Destroy() end
+        end
+        for i = 1, prestige do
+            local star = Instance.new("TextLabel")
+            star.Text = "⭐"
+            star.TextSize = 14
+            star.Size = UDim2.new(0, 15, 1, 0)
+            star.BackgroundTransparency = 1
+            star.Parent = prestigeContainer
+        end
+    end
 end
 
 --------------------------------------------------------------------------------
 -- Connect RemoteEvent Listeners
 --------------------------------------------------------------------------------
 
-Remotes.UpdateFragments.OnClientEvent:Connect(function(newBalance: number)
-    updateFragmentDisplay(newBalance)
+Remotes.UpdateFragments.OnClientEvent:Connect(updateFragmentDisplay)
+Remotes.UpdateInventory.OnClientEvent:Connect(updateInventoryDisplay)
+Remotes.UpdateBattery.OnClientEvent:Connect(updateBatteryDisplay)
+
+Remotes.UpdateXP.OnClientEvent:Connect(function(xp, level, prestige)
+    updateXP(xp or 0, level or 1, prestige or 0)
 end)
 
-Remotes.UpdateInventory.OnClientEvent:Connect(function(count: number, maxSlots: number)
-    updateInventoryDisplay(count, maxSlots)
+Remotes.UpdateLevel.OnClientEvent:Connect(function(newLevel)
+    -- Level Up Celebration?
+    if levelLabel then
+        local originalColor = levelLabel.TextColor3
+        for i = 1, 3 do
+            levelLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            task.wait(0.1)
+            levelLabel.TextColor3 = COLORS.FragmentGold
+            task.wait(0.1)
+        end
+        levelLabel.TextColor3 = originalColor
+    end
 end)
-
-Remotes.UpdateBattery.OnClientEvent:Connect(function(percent: number)
-    updateBatteryDisplay(percent)
-end)
-
---------------------------------------------------------------------------------
--- Build the HUD on script start
---------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 -- Hide loot that this player has already picked up
@@ -379,22 +533,11 @@ end)
 
 Remotes.HideLootForPlayer.OnClientEvent:Connect(function(lootPart: BasePart)
     if not lootPart or not lootPart:IsA("BasePart") then return end
-
-    -- Make invisible
     lootPart.Transparency = 1
-
-    -- Hide selection box, billboard, particles, lights
     for _, child in ipairs(lootPart:GetChildren()) do
-        if child:IsA("BillboardGui") then
+        if child:IsA("BillboardGui") or child:IsA("SelectionBox") or child:IsA("ProximityPrompt") or child:IsA("PointLight") or child:IsA("ParticleEmitter") then
             child.Enabled = false
-        elseif child:IsA("SelectionBox") then
-            child.Visible = false
-        elseif child:IsA("ProximityPrompt") then
-            child.Enabled = false
-        elseif child:IsA("PointLight") then
-            child.Enabled = false
-        elseif child:IsA("ParticleEmitter") then
-            child.Enabled = false
+            if child:IsA("SelectionBox") then child.Visible = false end
         end
     end
 end)

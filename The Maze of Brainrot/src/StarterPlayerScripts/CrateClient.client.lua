@@ -494,6 +494,12 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
+-- Listen for shared toggle event (from HUD)
+local toggleEvent = ReplicatedStorage:WaitForChild("ToggleCrateShop", 5)
+if toggleEvent then
+    toggleEvent.Event:Connect(toggleShop)
+end
+
 -- Handle crate result from server
 Remotes.CrateResult.OnClientEvent:Connect(function(success: boolean, itemData: any, message: string)
     if success and itemData then
