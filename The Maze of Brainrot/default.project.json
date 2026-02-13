@@ -1,0 +1,140 @@
+{
+    "name": "TheMazeOfBrainrot",
+    "tree": {
+        "$className": "DataModel",
+        "ReplicatedStorage": {
+            "$path": "src/ReplicatedStorage",
+            "GameRemotes": {
+                "$className": "Folder",
+                "UpdateFragments": {
+                    "$className": "RemoteEvent"
+                },
+                "UpdateInventory": {
+                    "$className": "RemoteEvent"
+                },
+                "UpdateBattery": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestMazeEntry": {
+                    "$className": "RemoteEvent"
+                },
+                "MazeEntryResult": {
+                    "$className": "RemoteEvent"
+                },
+                "LootPickup": {
+                    "$className": "RemoteEvent"
+                },
+                "LootPickupResult": {
+                    "$className": "RemoteEvent"
+                },
+                "SpawnLootVisual": {
+                    "$className": "RemoteEvent"
+                },
+                "EquipFlashlight": {
+                    "$className": "RemoteEvent"
+                },
+                "EntityPosition": {
+                    "$className": "RemoteEvent"
+                },
+                "PlayerDied": {
+                    "$className": "RemoteEvent"
+                },
+                "ReturnToHub": {
+                    "$className": "RemoteEvent"
+                },
+                "CameraCheck": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestSellItem": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestSellAll": {
+                    "$className": "RemoteEvent"
+                },
+                "SellResult": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestTradeUp": {
+                    "$className": "RemoteEvent"
+                },
+                "TradeUpResult": {
+                    "$className": "RemoteEvent"
+                },
+                "OpenMerchant": {
+                    "$className": "RemoteEvent"
+                },
+                "OpenTradeUp": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestInventoryData": {
+                    "$className": "RemoteEvent"
+                },
+                "InventoryData": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestCratePurchase": {
+                    "$className": "RemoteEvent"
+                },
+                "CrateResult": {
+                    "$className": "RemoteEvent"
+                },
+                "HideLootForPlayer": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestDropItem": {
+                    "$className": "RemoteEvent"
+                },
+                "DropItemResult": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestEquipItem": {
+                    "$className": "RemoteEvent"
+                },
+                "EquipItemResult": {
+                    "$className": "RemoteEvent"
+                },
+                "ApplyPowerUp": {
+                    "$className": "RemoteEvent"
+                },
+                "UpdateXP": {
+                    "$className": "RemoteEvent"
+                },
+                "UpdateLevel": {
+                    "$className": "RemoteEvent"
+                },
+                "PrestigeUp": {
+                    "$className": "RemoteEvent"
+                },
+                "RequestPrestige": {
+                    "$className": "RemoteEvent"
+                },
+                "GamePassOwned": {
+                    "$className": "RemoteEvent"
+                },
+                "CheckGamePasses": {
+                    "$className": "RemoteEvent"
+                },
+                "DailyRewardClaim": {
+                    "$className": "RemoteEvent"
+                },
+                "DailyRewardData": {
+                    "$className": "RemoteEvent"
+                },
+                "SpawnFollower": {
+                    "$className": "RemoteEvent"
+                },
+                "RemoveFollower": {
+                    "$className": "RemoteEvent"
+                }
+            }
+        },
+        "ServerScriptService": {
+            "$path": "src/ServerScriptService"
+        },
+        "StarterPlayer": {
+            "StarterPlayerScripts": {
+                "$path": "src/StarterPlayerScripts"
+            }
+        }
+    }
+}
