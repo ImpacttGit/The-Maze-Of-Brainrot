@@ -32,6 +32,7 @@ local LootSpawner = require(ServerScriptService:WaitForChild("LootSpawner"))
 local PlayerManager = require(ServerScriptService:WaitForChild("PlayerManager"))
 local EntityManager = require(ServerScriptService:WaitForChild("EntityManager"))
 local DeathHandler = require(ServerScriptService:WaitForChild("DeathHandler"))
+local BadgeHandler = require(ServerScriptService:WaitForChild("BadgeHandler"))
 
 --------------------------------------------------------------------------------
 -- Configuration
@@ -180,6 +181,10 @@ local function startMazeRun(player: Player)
         if teleported then
             Remotes.MazeEntryResult:FireClient(member, true, "Entering the Maze...")
             Remotes.EquipFlashlight:FireClient(member, true)
+            
+            -- Award Badge: The Intern
+            BadgeHandler.award(member, "Intern")
+
             if PlayerManager then
                 PlayerManager.setBattery(member, 100)
                 PlayerManager.setInMaze(member, true)
@@ -250,6 +255,9 @@ function exitMazeRun(playerOrLeader: Player)
         teleportPlayer(member, hubCFrame)
         Remotes.EquipFlashlight:FireClient(member, false)
         Remotes.ReturnToHub:FireClient(member, "Extracted successfully!")
+        
+        -- Award Badge: Survivor
+        BadgeHandler.award(member, "Survivor")
         
         if PlayerManager then
             PlayerManager.setInMaze(member, false)

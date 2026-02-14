@@ -25,6 +25,7 @@ local Modules = ReplicatedStorage:WaitForChild("Modules")
 local InventoryService = require(Modules.Services.InventoryService)
 local FragmentService = require(Modules.Services.FragmentService)
 local Remotes = require(ReplicatedStorage:WaitForChild("RemoteEvents"))
+local BadgeHandler = require(ServerScriptService:WaitForChild("BadgeHandler"))
 
 local PlayerManager = {}
 
@@ -411,6 +412,10 @@ function PlayerManager.prestige(player: Player): boolean
     pushProgressionUpdate(player, data)
     Remotes.PrestigeUp:FireClient(player, data.prestige)
     
+    if data.prestige >= 1 then
+        BadgeHandler.award(player, "OfficeLegend")
+    end
+    
     print("[PlayerManager] " .. player.Name .. " prestiged to tier " .. data.prestige)
     return true
 end
@@ -432,9 +437,12 @@ function PlayerManager.addItem(player: Player, itemInstance: any): boolean
         pushInventoryUpdate(player, entry.inventory)
         
         -- Update followers if new item is a Legendary follower
-        if itemInstance.Rarity == "Legendary" and itemInstance.IsFollower then
-            local FollowerService = require(ServerScriptService:WaitForChild("FollowerService"))
-            FollowerService.updateFollowers(player)
+        if itemInstance.Rarity == "Legendary" then
+            BadgeHandler.award(player, "LegendaryCollector")
+            if itemInstance.IsFollower then
+                local FollowerService = require(ServerScriptService:WaitForChild("FollowerService"))
+                FollowerService.updateFollowers(player)
+            end
         end
     end
     return added
