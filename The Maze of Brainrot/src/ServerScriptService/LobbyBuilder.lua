@@ -21,6 +21,24 @@ local Lighting = game:GetService("Lighting")
 
 local LobbyBuilder = {}
 
+local InsertService = game:GetService("InsertService")
+
+local function safeLoadAsset(assetId, parent)
+    local success, model = pcall(function()
+        return InsertService:LoadAsset(tonumber(assetId))
+    end)
+    if success and model then
+        local asset = model:GetChildren()[1]
+        if asset then
+            asset.Parent = parent
+            return asset
+        end
+    else
+        warn("Failed to load Lobby asset: " .. tostring(assetId))
+    end
+    return nil
+end
+
 --------------------------------------------------------------------------------
 -- Constants
 --------------------------------------------------------------------------------
@@ -235,35 +253,52 @@ local function buildElevator(folder)
     local elevX = LOBBY_WIDTH/2 - 3
     local elevZ = 0
 
-    -- Elevator frame (dark metal surround)
-    createPart({
-        Name = "ElevatorFrame",
-        Size = Vector3.new(2, 14, 14),
-        Position = Vector3.new(elevX - 1, 7, elevZ),
-        Color = COLORS.DarkMetal,
-        Material = Enum.Material.DiamondPlate,
-        Parent = folder,
-    })
+    -- Try loading the Real Elevator Asset
+    local realElevator = safeLoadAsset(14018163140, folder)
+    
+    if realElevator then
+        realElevator.Name = "ElevatorModel"
+        -- Position it (Assuming Model needs PivotTo)
+        -- We position it at the lobby wall
+        local targetCF = CFrame.new(elevX, FLOOR_Y, elevZ) * CFrame.Angles(0, math.rad(-90), 0) -- Face inwards
+        if realElevator:IsA("Model") then
+             realElevator:PivotTo(targetCF)
+        else
+             realElevator.CFrame = targetCF
+        end
+        print("Loaded Real Elevator Model")
+    else
+        -- FALLBACK: Blockout
+        -- Elevator frame (dark metal surround)
+        createPart({
+            Name = "ElevatorFrame",
+            Size = Vector3.new(2, 14, 14),
+            Position = Vector3.new(elevX - 1, 7, elevZ),
+            Color = COLORS.DarkMetal,
+            Material = Enum.Material.DiamondPlate,
+            Parent = folder,
+        })
 
-    -- Left door
-    createPart({
-        Name = "ElevatorDoorL",
-        Size = Vector3.new(1, 10, 5),
-        Position = Vector3.new(elevX, 5.5, elevZ - 3),
-        Color = COLORS.Metal,
-        Material = Enum.Material.Metal,
-        Parent = folder,
-    })
+        -- Left door
+        createPart({
+            Name = "ElevatorDoorL",
+            Size = Vector3.new(1, 10, 5),
+            Position = Vector3.new(elevX, 5.5, elevZ - 3),
+            Color = COLORS.Metal,
+            Material = Enum.Material.Metal,
+            Parent = folder,
+        })
 
-    -- Right door
-    createPart({
-        Name = "ElevatorDoorR",
-        Size = Vector3.new(1, 10, 5),
-        Position = Vector3.new(elevX, 5.5, elevZ + 3),
-        Color = COLORS.Metal,
-        Material = Enum.Material.Metal,
-        Parent = folder,
-    })
+        -- Right door
+        createPart({
+            Name = "ElevatorDoorR",
+            Size = Vector3.new(1, 10, 5),
+            Position = Vector3.new(elevX, 5.5, elevZ + 3),
+            Color = COLORS.Metal,
+            Material = Enum.Material.Metal,
+            Parent = folder,
+        })
+    end
 
     -- Warning stripes above elevator
     createPart({
@@ -326,7 +361,40 @@ end
 local function buildMerchant(folder)
     local mx, mz = -25, 20
 
-    -- Counter desk
+    -- Try loading Real Merchant NPC
+    local merchantModel = safeLoadAsset(8051893184, folder)
+    if merchantModel then
+        merchantModel.Name = "MerchantNPC_Model"
+        -- Position behind counter
+        local targetCF = CFrame.new(mx, 4.5, mz + 3) * CFrame.Angles(0, math.rad(180), 0)
+        if merchantModel:IsA("Model") then
+            merchantModel:PivotTo(targetCF)
+        else
+            merchantModel.CFrame = targetCF
+        end
+    else
+        -- Fallback NPC Body
+        createPart({
+            Name = "MerchantNPC",
+            Size = Vector3.new(2, 5, 1.5),
+            Position = Vector3.new(mx, 4.5, mz + 3),
+            Color = Color3.fromRGB(100, 70, 50),
+            Material = Enum.Material.SmoothPlastic,
+            Parent = folder,
+        })
+        
+        -- NPC Head
+        createPart({
+            Name = "MerchantHead",
+            Size = Vector3.new(1.6, 1.6, 1.6),
+            Position = Vector3.new(mx, 7.8, mz + 3),
+            Color = Color3.fromRGB(210, 180, 150),
+            Material = Enum.Material.SmoothPlastic,
+            Parent = folder,
+        })
+    end
+
+    -- Counter desk (Always build the desk)
     createPart({
         Name = "MerchantCounter",
         Size = Vector3.new(14, 4, 3),
@@ -336,7 +404,6 @@ local function buildMerchant(folder)
         Parent = folder,
     })
 
-    -- Counter top (lighter)
     createPart({
         Name = "MerchantCounterTop",
         Size = Vector3.new(14.5, 0.5, 3.5),
@@ -346,33 +413,12 @@ local function buildMerchant(folder)
         Parent = folder,
     })
 
-    -- Cash register (small box)
     createPart({
         Name = "CashRegister",
         Size = Vector3.new(3, 2, 2),
         Position = Vector3.new(mx + 3, 5.25, mz),
         Color = COLORS.DarkMetal,
         Material = Enum.Material.Metal,
-        Parent = folder,
-    })
-
-    -- NPC Merchant body (behind counter)
-    local npcBody = createPart({
-        Name = "MerchantNPC",
-        Size = Vector3.new(2, 5, 1.5),
-        Position = Vector3.new(mx, 4.5, mz + 3),
-        Color = Color3.fromRGB(100, 70, 50),
-        Material = Enum.Material.SmoothPlastic,
-        Parent = folder,
-    })
-
-    -- NPC Head
-    createPart({
-        Name = "MerchantHead",
-        Size = Vector3.new(1.6, 1.6, 1.6),
-        Position = Vector3.new(mx, 7.8, mz + 3),
-        Color = Color3.fromRGB(210, 180, 150),
-        Material = Enum.Material.SmoothPlastic,
         Parent = folder,
     })
 
