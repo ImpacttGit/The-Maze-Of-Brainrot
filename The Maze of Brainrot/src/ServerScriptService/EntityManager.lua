@@ -304,6 +304,8 @@ local function behaviorPatrol(model: Model, players: {Player}, entityDef: any, o
 end
 
 local function behaviorStalk(model: Model, players: {Player}, entityDef: any, origin: Vector3, session: any)
+    local timeUnwatched = 0
+    
     while session.alive and model.Parent do
         if session.distractionPos and tick() < session.distractionEndTime then
             navigateTo(model, session.distractionPos, entityDef.Speed)
@@ -330,25 +332,36 @@ local function behaviorStalk(model: Model, players: {Player}, entityDef: any, or
                      end
  
                      if not isLooking then
-                         -- BACK TURNED: RUSH
-                         local rushSpeed = entityDef.Speed * (entityDef.RushSpeedMultiplier or 1.5)
-                         navigateTo(model, pPos, rushSpeed)
+                         -- BACK TURNED: Increment timer
+                         timeUnwatched += 0.2
+                         
+                         if timeUnwatched > 3 then
+                             -- SPRINT MODE: Speed = 25
+                             navigateTo(model, pPos, 25)
+                         else
+                             -- Creep closer
+                             navigateTo(model, pPos, entityDef.Speed * 0.5)
+                         end
                      else
-                         -- PLAYING WATCHING: Maintain Gap
-                         if dist > (entityDef.StalkGap or 25) + 5 then
+                         -- PLAYING WATCHING: Maintain Gap (30 studs)
+                         timeUnwatched = 0 -- Reset timer
+                         
+                         if dist > 35 then
                              -- Too far, creep closer
                              navigateTo(model, pPos, entityDef.Speed * 0.5)
-                         elseif dist < (entityDef.StalkGap or 25) - 5 then
+                         elseif dist < 25 then
                              -- Too close, stand still or back away (for now stop)
                              local humanoid = model:FindFirstChildWhichIsA("Humanoid")
                              if humanoid then
                                  humanoid:MoveTo(entityPos) 
+                                 humanoid.WalkSpeed = 0
                              end
                          else
-                             -- In gap range, hold position
+                             -- In gap range (25-35), hold position
                              local humanoid = model:FindFirstChildWhichIsA("Humanoid")
                              if humanoid then
                                  humanoid:MoveTo(entityPos)
+                                 humanoid.WalkSpeed = 0
                              end
                          end
                      end
@@ -356,6 +369,7 @@ local function behaviorStalk(model: Model, players: {Player}, entityDef: any, or
              end
         else
             -- Wander
+            timeUnwatched = 0
             if closest and math.random() < entityDef.PlayerSeekChance then
                  local pPos = getPlayerPosition(closest)
                  if pPos then navigateTo(model, pPos, entityDef.Speed * 0.7) end
@@ -371,7 +385,6 @@ end
 local function behaviorChase(model: Model, players: {Player}, entityDef: any, origin: Vector3, session: any)
     local isChasing = false
     local lastKnownPos = nil
-    local chaseLostTime = 0
     
     while session.alive and model.Parent do
         if session.distractionPos and tick() < session.distractionEndTime then
@@ -390,20 +403,28 @@ local function behaviorChase(model: Model, players: {Player}, entityDef: any, or
         if closest and dist < entityDef.DetectionRange and canSee then
             isChasing = true
             lastKnownPos = getPlayerPosition(closest)
-            chaseLostTime = 0
         elseif isChasing then
-            chaseLostTime += 0.3
-            if chaseLostTime > entityDef.PursuitDuration or (closest and dist > entityDef.LoseInterestRange) then
+             if closest and dist > entityDef.LoseInterestRange then
                 isChasing = false
                 lastKnownPos = nil
             end
         end
 
-        if isChasing then
-            local target = (closest and getPlayerPosition(closest)) or lastKnownPos
-            if target then
-                navigateTo(model, target, entityDef.Speed)
+        if isChasing and closest then
+            -- PREDICTION LOGIC: Target + Velocity
+            local targetPos = getPlayerPosition(closest)
+            if targetPos and closest.Character and closest.Character.PrimaryPart then
+                local velocity = closest.Character.PrimaryPart.AssemblyLinearVelocity
+                -- Predict 1-2 seconds ahead based on distance
+                local predictionTime = math.clamp(dist / entityDef.Speed, 0.5, 2) 
+                local predictedPos = targetPos + (velocity * predictionTime)
+                
+                -- Simple validation: Raycast to see if prediction goes through wall?
+                -- Or just move there. Pathfinding handles walls.
+                navigateTo(model, predictedPos, entityDef.Speed)
             end
+        elseif isChasing and lastKnownPos then
+             navigateTo(model, lastKnownPos, entityDef.Speed)
         else
             -- Wander
              if closest and math.random() < entityDef.PlayerSeekChance then
@@ -431,9 +452,9 @@ local function behaviorCamera(model: Model, players: {Player}, entityDef: any, o
         -- Check if ANY player is looking
         local isWatched = false
         if entityPos then
-            -- Refined check for Camera behavior
             for _, p in ipairs(players) do
-                if isInCameraView(p, entityPos) and hasLineOfSight(model, p) then
+                -- Logic: If dot_product > 0.4 and raycast_hit == nil (LineOfSight)
+                if isInCameraView(p, entityPos, 0.4) and hasLineOfSight(model, p) then
                     isWatched = true
                     break
                 end

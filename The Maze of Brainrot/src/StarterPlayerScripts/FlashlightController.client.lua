@@ -81,7 +81,40 @@ local function destroySpotLight()
 end
 
 --------------------------------------------------------------------------------
--- INTERNAL: Flicker effect (battery < 15%)
+-- Toggle flashlight ON/OFF
+--------------------------------------------------------------------------------
+
+local toggleSound = Instance.new("Sound")
+toggleSound.Name = "FlashlightToggle"
+toggleSound.SoundId = "rbxassetid://131826366187224"
+toggleSound.Volume = 0.5
+toggleSound.Parent = PlayerGui
+
+local flickerSound = Instance.new("Sound")
+flickerSound.Name = "FlashlightFlicker"
+flickerSound.SoundId = "rbxassetid://129511449394470"
+flickerSound.Volume = 0.6
+flickerSound.Parent = PlayerGui
+
+local function toggleFlashlight()
+    if not isInMaze then return end
+    if battery <= 0 then return end -- Can't toggle on when dead
+
+    isLightOn = not isLightOn
+    toggleSound:Play()
+
+    if spotLight then
+        spotLight.Enabled = isLightOn
+        if isLightOn then
+            spotLight.Brightness = SPOTLIGHT_BRIGHTNESS
+        end
+    end
+
+    print("[Flashlight] " .. (isLightOn and "ON" or "OFF") .. " — Battery: " .. math.floor(battery) .. "%")
+end
+
+--------------------------------------------------------------------------------
+-- Main update loop
 --------------------------------------------------------------------------------
 
 local function applyFlicker()
@@ -103,6 +136,9 @@ local function applyFlicker()
         if math.random() < flickerChance * 0.4 then
             spotLight.Brightness = FLICKER_MIN
             spotLight.Enabled = math.random() > 0.3
+            if not spotLight.Enabled and math.random() < 0.2 then
+                 if not flickerSound.IsPlaying then flickerSound:Play() end
+            end
         else
             spotLight.Brightness = SPOTLIGHT_BRIGHTNESS * (battery / 100)
             spotLight.Enabled = true
@@ -111,26 +147,6 @@ local function applyFlicker()
         spotLight.Brightness = SPOTLIGHT_BRIGHTNESS
         spotLight.Enabled = true
     end
-end
-
---------------------------------------------------------------------------------
--- Toggle flashlight ON/OFF
---------------------------------------------------------------------------------
-
-local function toggleFlashlight()
-    if not isInMaze then return end
-    if battery <= 0 then return end -- Can't toggle on when dead
-
-    isLightOn = not isLightOn
-
-    if spotLight then
-        spotLight.Enabled = isLightOn
-        if isLightOn then
-            spotLight.Brightness = SPOTLIGHT_BRIGHTNESS
-        end
-    end
-
-    print("[Flashlight] " .. (isLightOn and "ON" or "OFF") .. " — Battery: " .. math.floor(battery) .. "%")
 end
 
 --------------------------------------------------------------------------------

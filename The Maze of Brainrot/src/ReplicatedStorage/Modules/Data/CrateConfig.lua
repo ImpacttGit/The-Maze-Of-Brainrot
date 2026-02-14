@@ -29,7 +29,7 @@ CrateConfig.Crates = {
             { Rarity = "Rare",   Weight = 30 },
         },
         Color = Color3.fromRGB(200, 200, 200), -- Silver
-        ProductId = 0, -- Placeholder DeveloperProduct ID
+        ProductId = 3536451655, -- Common Crate
     },
 
     Rare = {
@@ -44,7 +44,7 @@ CrateConfig.Crates = {
             { Rarity = "Epic", Weight = 40 },
         },
         Color = Color3.fromRGB(0, 120, 255), -- Blue
-        ProductId = 0,
+        ProductId = 3536451905, -- Rare Crate
     },
 
     Legendary = {
@@ -60,7 +60,7 @@ CrateConfig.Crates = {
             { Rarity = "Legendary", Weight = 25 },
         },
         Color = Color3.fromRGB(255, 215, 0), -- Gold
-        ProductId = 0,
+        ProductId = 3536452068, -- Legendary Crate
     },
 }
 

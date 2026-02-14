@@ -389,6 +389,34 @@ dismissCorner.Parent = revealDismiss
 -- Reveal Animation
 --------------------------------------------------------------------------------
 
+local openSound = Instance.new("Sound")
+openSound.Name = "CrateOpen"
+openSound.SoundId = "rbxassetid://17419512544"
+openSound.Volume = 0.8
+openSound.Parent = PlayerGui
+
+local revealSound = Instance.new("Sound")
+revealSound.Name = "CrateReveal"
+revealSound.SoundId = "rbxassetid://137505070991597"
+revealSound.Volume = 0.5
+revealSound.Parent = PlayerGui
+
+local function playRevealPings(rarity)
+    local pings = 1
+    if rarity == "Rare" then pings = 2
+    elseif rarity == "Epic" then pings = 3
+    elseif rarity == "Legendary" then pings = 5
+    end
+
+    task.spawn(function()
+        for i = 1, pings do
+            revealSound.PlaybackSpeed = 1 + (i * 0.1)
+            revealSound:Play()
+            task.wait(0.2)
+        end
+    end)
+end
+
 local function showReveal(itemData: any)
     local rarityTier = RarityConfig.Tiers[itemData.Rarity]
     local rarityColor = rarityTier and rarityTier.OutlineColor or Color3.fromRGB(200, 200, 200)
@@ -404,6 +432,8 @@ local function showReveal(itemData: any)
     revealCard.Size = UDim2.new(0, 10, 0, 10)
     revealCard.Position = UDim2.new(0.5, -5, 0.5, -5)
     revealGui.Enabled = true
+    
+    openSound:Play()
 
     -- Burst animation
     TweenService:Create(revealCard, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
@@ -415,6 +445,8 @@ local function showReveal(itemData: any)
     TweenService:Create(revealCardStroke, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 2, true), {
         Thickness = 5,
     }):Play()
+    
+    playRevealPings(itemData.Rarity)
 end
 
 local function hideReveal()

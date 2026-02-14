@@ -21,9 +21,10 @@ local GamePassService = {}
 --------------------------------------------------------------------------------
 
 local PASS_IDS = {
-    SpeedBoost = 0,        -- Permanent +4 WalkSpeed
-    UpgradedFlashlight = 0, -- 2x battery, brighter beam
-    LootLuck = 0,          -- 1.5x rare/epic spawn chance
+    SpeedBoost = 1711906418,         -- Speed Demon (+4 WalkSpeed)
+    UpgradedFlashlight = 1712080251, -- Mega Flashlight (2x battery, 1.5x brightness)
+    LootLuck = 1711854417,           -- Lucky Looter (1.5x rare/epic spawn)
+    VIP = 1711768520,                -- VIP Nameplate (1.2x fragments)
 }
 
 local PASS_INFO = {
