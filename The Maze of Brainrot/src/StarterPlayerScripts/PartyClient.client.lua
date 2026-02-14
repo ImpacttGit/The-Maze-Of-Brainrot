@@ -277,9 +277,9 @@ end
 -- Init
 --------------------------------------------------------------------------------
 
-toggleBtn.MouseButton1Click:Connect(function()
-    panel.Visible = not panel.Visible
-end)
+-- toggleBtn is managed by HUD, no need to listen here directly unless we find the button
+-- For now, removing this block to prevent error
+
 
 Remotes.PartyUpdate.OnClientEvent:Connect(updatePartyUI)
 Remotes.PartyInviteReceived.OnClientEvent:Connect(showInvitePopup)

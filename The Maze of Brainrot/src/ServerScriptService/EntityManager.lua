@@ -672,23 +672,3 @@ end)
 print("[EntityManager] Initialized")
 
 return EntityManager
---------------------------------------------------------------------------------
--- PUBLIC: Check if a player has an active entity
---------------------------------------------------------------------------------
-
-function EntityManager.hasActiveEntity(player: Player): boolean
-    return activeEntities[player.UserId] ~= nil
-end
-
---------------------------------------------------------------------------------
--- Cleanup on player leave
---------------------------------------------------------------------------------
-
-Players.PlayerRemoving:Connect(function(player)
-    EntityManager.cleanup(player)
-    playerCameraData[player.UserId] = nil
-end)
-
-print("[EntityManager] Initialized")
-
-return EntityManager
